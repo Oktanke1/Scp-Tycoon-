@@ -45886,8 +45886,9 @@ class Capture {
       const o = this.view?.o; // Fase 58: fuera de pantalla no se construye la figura (sí se puede seleccionar)
       if (o?.vp) { const pr = o.project(p.u, y + 0.5, p.v); if (pr.w <= 0 || pr.x < -160 || pr.x > o.w + 160 || pr.y < -220 || pr.y > o.h + 220) { if (this.cur) this.picks.push({ type: this.cur.type, id: this.cur.id, u: p.u, v: p.v, y: y + 0.55, r: 0.5 }); return; } }
       const q = m.params.split('|'); const back = q[1] === 'b';
-      if (this.view?.g?.three && this.view.people && CH3.ready(q[0], q[5] ?? '')) { // Fase 60: modelo esculpido (Three.js)
-        this.view.people.push({ id: this.cur?.id, key: rkey(ax, ay), u: p.u, v: p.v, y, ang: headingOf(back, flip), dept: q[0], frame: q[2], flags: q[5] ?? '', seed: (Number(q[7]) || 0) * 7919 + (Number(q[3]) || 0) * 131 + (Number(q[4]) || 0) * 17 + (Number(q[6]) || 0) });
+      const seed3 = ((Number(q[7]) || 0) * 7919 + (Number(q[3]) || 0) * 131 + (Number(q[4]) || 0) * 17 + (Number(q[6]) || 0)) >>> 0;
+      if (this.view?.g?.three && this.view.people && CH3.ready(q[0], q[5] ?? '', seed3)) { // Fase 60: modelo esculpido (Three.js)
+        this.view.people.push({ id: this.cur?.id, key: rkey(ax, ay), u: p.u, v: p.v, y, ang: headingOf(back, flip), dept: q[0], frame: q[2], flags: q[5] ?? '', seed: seed3 });
         if (this.cur) this.picks.push({ type: this.cur.type, id: this.cur.id, u: p.u, v: p.v, y: y + 0.55, r: 0.5 }); return;
       }
       figure(this.geo, p.u, p.v, y, headingOf(back, flip), q[0], q[2], Number(q[3]) || 0, Number(q[4]) || 0, q[5] ?? '', Number(q[6]) || 0, this.now, Number(q[7]) || 0); this.geo.M = null;
@@ -46243,9 +46244,9 @@ function skinPaint(p) {
 function headSDF(o) { // cara estilizada y sencilla: óvalo, mandíbula fina, nariz pequeña, orejas y cuello
   const H = H0, jw = o.jaw ?? 0.068, ns = (o.nose ?? 1) * 0.8;
   return (p) => {
-    let d = ell(p, [H[0], H[1] + 0.025, H[2] - 0.01], [0.088, 0.108, 0.098]);              // cráneo
+    let d = ell(p, [H[0], H[1] + 0.025, H[2] - 0.01], [0.088 * (o.wide ?? 1), 0.108 * (o.long ?? 1), 0.098]);              // cráneo
     d = smin(d, ell(p, [H[0], H[1] - 0.04, H[2] + 0.018], [jw, 0.062, 0.074]), 0.035);       // mandíbula
-    d = smin(d, sph(p, [0, H[1] - 0.086, H[2] + 0.05], 0.022), 0.025);                      // mentón
+    d = smin(d, sph(p, [0, H[1] - 0.086 * (o.long ?? 1), H[2] + 0.05], o.chin ?? 0.022), 0.025);                      // mentón
     for (const s of [-1, 1]) d = smax(d, -sph(p, [s * 0.035, H[1] + 0.02, H[2] + 0.088], 0.02), 0.008); // cuencas suaves
     d = smin(d, cap(p, [0, H[1] + 0.02, H[2] + 0.088], [0, H[1] - 0.02, H[2] + 0.104 + 0.004 * ns], 0.008 * ns, 0.013 * ns), 0.012); // nariz
     d = smin(d, sph(p, [0, H[1] - 0.022, H[2] + 0.104 + 0.004 * ns], 0.014 * ns), 0.008);
@@ -46259,15 +46260,21 @@ function handSDF(s, curl = 0.5) { // mano estilizada: palma, bloque de dedos con
   const w = J[s > 0 ? 'wrL' : 'wrR'];
   return (p) => {
     let d = rbox(p, [w[0] + s * 0.004, w[1] - 0.05, w[2] + 0.008], [0.017, 0.038, 0.036], 0.015);                     // palma
-    const fy = w[1] - 0.1, fz = w[2] + 0.008 + curl * 0.012;
-    let f = rbox(p, [w[0] + s * (0.006 + curl * 0.006), fy, fz], [0.014, 0.03, 0.033], 0.012);                         // dedos juntos
-    for (let k = 1; k < 4; k++) f = smax(f, -rbox(p, [w[0] + s * (0.006 + curl * 0.006), fy - 0.012, w[2] - 0.025 + k * 0.0165 + curl * 0.012], [0.02, 0.022, 0.0012], 0.001), 0.002); // separación entre dedos
-    d = smin(d, f, 0.012);
-    d = smin(d, cap(p, [w[0] - s * 0.008, w[1] - 0.04, w[2] + 0.036], [w[0] - s * 0.008, w[1] - 0.075, w[2] + 0.06], 0.011, 0.0095), 0.01); // pulgar
+    const D = ARMD[s > 0 ? 'L' : 'R']; d = smin(d, cap(p, [w[0] - D[0] * 0.035, w[1] - D[1] * 0.035, w[2] - D[2] * 0.035], [w[0] + s * 0.003, w[1] - 0.03, w[2] + 0.006], 0.03, 0.028), 0.012); // muñeca (entra en la manga)
+    const c = 0.6 + curl * 0.6; // dedos relajados: bajan y se curvan hacia la palma (no una garra recta)
+    let f = 1e9;
+    for (let k = 0; k < 4; k++) { const z = w[2] + 0.034 - k * 0.018, x0 = w[0] + s * 0.005; const a = [x0, w[1] - 0.08, z], b = [x0 + s * 0.004, w[1] - 0.112, z + 0.006 * c], e = [x0 + s * (0.004 - 0.012 * c), w[1] - 0.128 + 0.008 * c, z + 0.014 * c];
+      f = Math.min(f, smin(cap(p, a, b, 0.0098, 0.0088), cap(p, b, e, 0.0088, 0.0078), 0.006)); }
+    d = smin(d, f, 0.008);
+    d = smin(d, cap(p, [w[0] - s * 0.01, w[1] - 0.045, w[2] + 0.034], [w[0] - s * 0.006, w[1] - 0.078, w[2] + 0.055], 0.0115, 0.0098), 0.01); // pulgar
     return d;
   };
 }
-const armSeg = (p, s, r0, r1, r2, sz = 1) => smin(cap(p, J[s > 0 ? 'shL' : 'shR'], J[s > 0 ? 'elL' : 'elR'], r0, r1, sz), cap(p, J[s > 0 ? 'elL' : 'elR'], J[s > 0 ? 'wrL' : 'wrR'], r1 * 0.98, r2, sz), 0.03);
+const ARMD = { L: _nrm(sub(J.wrL, J.elL)), R: _nrm(sub(J.wrR, J.elR)) };
+function _nrm(a) { const l = len(a) || 1; return [a[0] / l, a[1] / l, a[2] / l]; }
+const armSeg = (p, s, r0, r1, r2, sz = 1) => { const w = J[s > 0 ? 'wrL' : 'wrR'], D = ARMD[s > 0 ? 'L' : 'R']; // manga con puño recto un poco antes de la muñeca
+  const d = smin(cap(p, J[s > 0 ? 'shL' : 'shR'], J[s > 0 ? 'elL' : 'elR'], r0, r1, sz), cap(p, J[s > 0 ? 'elL' : 'elR'], w, r1 * 0.98, r2 * 1.06, sz), 0.03);
+  return Math.max(d, dot(sub(p, w), D) + 0.006); };
 const legSeg = (p, s, r0, r1, r2) => smin(cap(p, J[s > 0 ? 'hiL' : 'hiR'], J[s > 0 ? 'knL' : 'knR'], r0, r1), cap(p, J[s > 0 ? 'knL' : 'knR'], J[s > 0 ? 'anL' : 'anR'], r1 * 0.98, r2), 0.035);
 const both = (fn) => (p) => Math.min(fn(p, 1), fn(p, -1));
 const fold = (p, amp, freq) => { const s = Math.sin(p[0] * freq * 0.8 + p[2] * freq * 0.6 + Math.sin(p[1] * freq * 0.3) * 1.6); return amp * (Math.pow(1 - Math.abs(s), 3) - 0.25); }; // pliegues con arista
@@ -46279,7 +46286,7 @@ function torsoSDF(p, w = 1, dz = 0.74) { // tronco con pecho, cintura y hombros,
   d = smin(d, cap(p, [-0.15 * w, 1.405, 0], [0.15 * w, 1.405, 0], 0.062, 0.062, 1.2), 0.07);
   return d;
 }
-function shoeSDF(s, hi = 0) { const a = J[s > 0 ? 'anL' : 'anR']; return (p) => { let d = ell(p, [a[0], 0.045, a[2] + 0.05], [0.052, 0.05, 0.12]); d = smin(d, cap(p, [a[0], 0.04, a[2] - 0.02], [a[0], 0.1 + hi, a[2] - 0.01], 0.052, 0.05 + hi * 0.06), 0.03); return smax(d, -p[1] + 0.0, 0.005); }; }
+function shoeSDF(s, hi = 0) { const a = J[s > 0 ? 'anL' : 'anR']; return (p) => { let d = ell(p, [a[0], 0.045, a[2] + 0.05], [0.052, 0.05, 0.12]); d = smin(d, cap(p, [a[0], 0.04, a[2] - 0.02], [a[0], 0.1 + hi, a[2] - 0.01], 0.052 + hi * 0.1, 0.05 + hi * 0.16), 0.03); return smax(d, -p[1] + 0.0, 0.005); }; }
 function soleSDF(s) { const a = J[s > 0 ? 'anL' : 'anR']; return (p) => smax(ell(p, [a[0], 0.02, a[2] + 0.05], [0.056, 0.03, 0.126]), Math.max(-p[1], p[1] - 0.018), 0.004); }
 function hairSDF(style) {
   const H = H0;
@@ -46430,35 +46437,36 @@ function deptDef(kind) {
     : add({ id: 'hands', role: 'skin', color: SKIN, mat: 'skin', h: 0.006, lo: [-0.4, 0.72, -0.06], hi: [0.4, 0.95, 0.11], f: (p) => Math.min(handSDF(1)(p), handSDF(-1)(p)) });
   const feet = (col, boot) => { add({ id: 'shoes', color: col, mat: 'leather', h: 0.01, lo: [-0.18, -0.01, -0.1], hi: [0.18, boot ? 0.3 : 0.18, 0.2], f: (p) => Math.min(shoeSDF(1, boot ? 0.14 : 0)(p), shoeSDF(-1, boot ? 0.14 : 0)(p)) }); add({ id: 'soles', color: '#151517', mat: 'rubber', h: 0.01, lo: [-0.18, -0.01, -0.1], hi: [0.18, 0.05, 0.2], f: (p) => Math.min(soleSDF(1)(p), soleSDF(-1)(p)) }); };
   const legs = (col, hide) => add({ id: 'pants', color: col, mat: 'cloth', h: 0.014, hideIn: hide, lo: [-0.2, 0.05, -0.12], hi: [0.2, 1.02, 0.12], f: (p) => smin(both((q, s) => legSeg(q, s, 0.082, 0.062, 0.054))(p) - joints(p), cap(p, [-0.08, 0.93, 0], [0.08, 0.93, 0], 0.12, 0.12, 1.25), 0.05) });
-  const suit = (col, w = 1.04, short = false, hide) => add({ id: 'suit', color: col, mat: 'cloth', h: 0.014, hideIn: hide, lo: [-0.3, 0.05, -0.2], hi: [0.3, 1.52, 0.2], f: (p) => smin(Math.min(torsoSDF(p, w, 0.76), short ? smax(armSeg(p, 1, 0.064, 0.056, 0.05), p[1] < 1.22 ? 1 : -1, 0) : armSeg(p, 1, 0.062, 0.054, 0.047), short ? smax(armSeg(p, -1, 0.064, 0.056, 0.05), p[1] < 1.22 ? 1 : -1, 0) : armSeg(p, -1, 0.062, 0.054, 0.047)), both((q, s) => legSeg(q, s, 0.086, 0.065, 0.056))(p), 0.05) - joints(p) });
+  const suit = (col, w = 1.04, short = false, hide, bk = 1, boots = 0) => add({ id: 'suit', color: col, mat: 'cloth', h: 0.014, hideIn: hide, lo: [-0.3, 0.05, -0.2], hi: [0.3, 1.52, 0.2], f: (p) => Math.max(smin(Math.min(torsoSDF(p, w, 0.76), short ? smax(armSeg(p, 1, 0.064, 0.056, 0.05), p[1] < 1.22 ? 1 : -1, 0) : armSeg(p, 1, 0.062 * bk, 0.054 * bk, 0.047 * bk), short ? smax(armSeg(p, -1, 0.064, 0.056, 0.05), p[1] < 1.22 ? 1 : -1, 0) : armSeg(p, -1, 0.062 * bk, 0.054 * bk, 0.047 * bk)), both((q, s) => legSeg(q, s, 0.086 * bk, 0.065 * bk, 0.056 * bk))(p), 0.05) - joints(p), boots ? 0.25 - p[1] : -1) });
   const top = (id, col, w, bottom, open, mat = 'cloth', hide) => add({ id, color: col, mat, h: 0.012, hideIn: hide, lo: [-0.3, bottom - 0.02, -0.22], hi: [0.3, 1.52, 0.22], f: (p) => smin(shellTorso(p, w, bottom, open), Math.min(armSeg(p, 1, 0.06, 0.052, 0.047), armSeg(p, -1, 0.06, 0.052, 0.047)), 0.03) });
   const forearms = () => add({ id: 'arms', role: 'skin', color: SKIN, mat: 'skin', h: 0.01, lo: [-0.4, 0.84, -0.1], hi: [0.4, 1.25, 0.1], f: (p) => Math.min(armSeg(p, 1, 0.052, 0.045, 0.04), armSeg(p, -1, 0.052, 0.045, 0.04)) });
   const belt = (col = '#1c1d20') => add({ id: 'belt', color: col, mat: 'leather', h: 0.01, lo: [-0.22, 0.88, -0.18], hi: [0.22, 1.0, 0.2], f: (p) => Math.max(cap(p, [0, 0.9, 0], [0, 1.0, 0], 0.168, 0.162, 1 / 0.78), Math.abs(p[1] - 0.95) - 0.026) });
   const tie = (col) => add({ id: 'tie', color: col, mat: 'cloth', h: 0.006, lo: [-0.05, 1.12, 0.06], hi: [0.05, 1.47, 0.18], f: (p) => smin(cap(p, [0, 1.44, 0.135], [0, 1.16, 0.15], 0.012, 0.022, 3), sph(p, [0, 1.445, 0.128], 0.016), 0.01) });
   const shirt = (col) => add({ id: 'shirt', color: col, mat: 'cloth', h: 0.012, lo: [-0.22, 0.9, -0.18], hi: [0.22, 1.5, 0.2], f: (p) => { let d = smin(torsoSDF(p, 1, 0.74) - 0.002, cap(p, [0, 1.42, 0.0], [0, 1.49, 0.0], 0.068, 0.062), 0.012); for (const s of [-1, 1]) d = Math.min(d, cap(p, [s * 0.02, 1.48, 0.065], [s * 0.05, 1.43, 0.11], 0.012, 0.008, 1)); return d; } });
-  const vest = (col, pouch) => { add({ id: 'vest', color: col, mat: 'plastic', h: 0.011, lo: [-0.26, 0.98, -0.18], hi: [0.26, 1.5, 0.2], f: (p) => { let d = rbox(p, [0, 1.235, 0.005], [0.165, 0.18, 0.128], 0.024); d = smax(d, -cap(p, [0, 1.5, 0.0], [0, 1.42, 0.04], 0.075, 0.075), 0.02); for (const s of [-1, 1]) d = smax(d, -ell(p, [s * 0.215, 1.34, 0], [0.07, 0.12, 0.1]), 0.02); d = Math.min(d, rbox(p, [0, 1.22, 0.112], [0.12, 0.13, 0.03], 0.012)); return d; } }); rules.vest = 'torso';
-    add({ id: 'pouch', color: pouch, mat: 'cloth', h: 0.009, lo: [-0.2, 1.04, 0.09], hi: [0.2, 1.38, 0.2], f: (p) => { let d = 1; for (const x of [-0.11, 0, 0.11]) { d = Math.min(d, rbox(p, [x, 1.13, 0.16], [0.045, 0.055, 0.028], 0.006)); d = Math.min(d, rbox(p, [x, 1.18, 0.168], [0.048, 0.018, 0.026], 0.005)); } return Math.min(d, rbox(p, [0, 1.335, 0.155], [0.12, 0.025, 0.02], 0.005)); } }); rules.pouch = 'torso'; };
-  const pads = (col) => add({ id: 'pads', color: col, mat: 'plastic', h: 0.009, lo: [-0.2, 0.4, -0.04], hi: [0.2, 0.6, 0.12], f: both((p, s) => rbox(p, [s * 0.105, 0.5, 0.062], [0.048, 0.058, 0.026], 0.012)) });
+  const vest = (col, pouch) => { add({ id: 'vest', color: col, mat: 'plastic', h: 0.011, lo: [-0.26, 0.98, -0.18], hi: [0.26, 1.5, 0.2], f: (p) => { let d = rbox(p, [0, 1.235, 0.005], [0.192, 0.185, 0.15], 0.03); d = smax(d, -cap(p, [0, 1.5, 0.0], [0, 1.42, 0.04], 0.075, 0.075), 0.02); for (const s of [-1, 1]) d = smax(d, -ell(p, [s * 0.235, 1.33, 0], [0.06, 0.13, 0.11]), 0.03); d = Math.min(d, rbox(p, [0, 1.22, 0.13], [0.13, 0.13, 0.03], 0.012)); return d; } }); rules.vest = 'torso';
+    add({ id: 'pouch', color: pouch, mat: 'cloth', h: 0.009, lo: [-0.2, 1.04, 0.09], hi: [0.2, 1.38, 0.2], f: (p) => { let d = 1; for (const x of [-0.11, 0, 0.11]) { d = Math.min(d, rbox(p, [x, 1.13, 0.174], [0.045, 0.055, 0.028], 0.006)); d = Math.min(d, rbox(p, [x, 1.18, 0.182], [0.048, 0.018, 0.026], 0.005)); } return Math.min(d, rbox(p, [0, 1.335, 0.17], [0.12, 0.025, 0.02], 0.005)); } }); rules.pouch = 'torso'; };
+  const shoulders = (col) => { for (const s of [-1, 1]) { const sh = J[s > 0 ? 'shL' : 'shR']; add({ id: 'spad' + (s > 0 ? 'L' : 'R'), rigid: s > 0 ? 'uarmL' : 'uarmR', color: col, mat: 'plastic', h: 0.007, lo: [sh[0] - 0.1, sh[1] - 0.14, -0.12], hi: [sh[0] + 0.12, sh[1] + 0.09, 0.12], f: (p) => smax(smax(ell(p, [sh[0] + s * 0.03, sh[1] - 0.01, 0], [0.07, 0.05, 0.082]), -ell(p, [sh[0] + s * 0.02, sh[1] - 0.045, 0], [0.064, 0.06, 0.074]), 0.004), -(p[1] - (sh[1] - 0.06)), 0.003) }); } };
+  const pads = (col) => add({ id: 'pads', color: col, mat: 'plastic', h: 0.009, lo: [-0.2, 0.4, -0.04], hi: [0.2, 0.6, 0.12], f: both((p, s) => rbox(p, [s * 0.108, 0.5, 0.068], [0.054, 0.062, 0.034], 0.014)) });
   const headgear = (id, col, f, mat = 'plastic') => add({ id, rigid: 'head', color: col, mat, h: 0.007, lo: [-0.17, 1.42, -0.17], hi: [0.17, 1.86, 0.2], f });
-  const L = { hair: true, extras: '', props: [] };
+  const L = { hair: true, extras: '', props: [], armOut: 0.04 };
   switch (kind) {
     case 'research': head(); shirt('#8ea7da'); tie('#3d5a8a'); legs('#5d5967'); feet('#3a2e2a');
       add({ id: 'coat', color: '#f3f5f7', mat: 'cloth', h: 0.0095, lo: [-0.3, 0.55, -0.24], hi: [0.3, 1.52, 0.25], f: (p) => { let d = torsoSDF(p, 1.06, 0.78) - 0.006; d = smin(d, cap(p, [0, 1.1, 0], [0, 0.6, -0.01], 0.165, 0.215, 1 / 0.8), 0.06); const w = 0.022 + Math.max(0, 1.4 - p[1]) * 0.09; d = smax(d, -Math.max(Math.abs(p[0]) - w, -(p[2] - 0.05)), 0.014); d = smax(d, 0.6 - p[1], 0.004); if (p[1] < 1.05) d -= fold(p, 0.0045, 32) * clamp((1.05 - p[1]) * 4, 0, 1); return smin(d, Math.min(armSeg(p, 1, 0.06, 0.052, 0.047), armSeg(p, -1, 0.06, 0.052, 0.047)) - joints(p) * 0.6, 0.03); } });
-      rules.coat = 'skirt'; rules.tie = 'torso'; rules.shirt = 'torso'; hands(); L.extras = 'research'; break;
+      rules.coat = 'skirt'; rules.tie = 'torso'; rules.shirt = 'torso'; hands(); L.extras = 'research'; L.armOut = 0.13; break;
     case 'medical': head(); suit('#4fb3a2', 1.02, true); forearms(); feet('#eef1f2'); hands(); L.hair = false;
       headgear('cap', '#3fa292', capSDF(), 'cloth'); L.extras = 'medical'; break;
     case 'administration': head(); shirt('#f2f4f5'); tie('#3d8ca2'); legs('#36444e'); feet('#1d2024'); top('jacket', '#3f4f5b', 1.06, 0.98, 0.07); rules.tie = 'torso'; rules.shirt = 'torso'; hands(); L.extras = 'admin'; break;
-    case 'engineering': head(); suit('#3e5468', 1.04, false, ['hivis', 'gloves', 'shoes']); top('hivis', '#f0873a', 1.1, 1.02, 0, 'cloth');
+    case 'engineering': head(); suit('#3e5468', 1.04, false, ['hivis', 'gloves', 'shoes'], 1, 1); add({ id: 'hivis', color: '#f0873a', mat: 'cloth', h: 0.012, lo: [-0.3, 1.0, -0.22], hi: [0.3, 1.52, 0.22], f: (p) => { let d = shellTorso(p, 1.12, 1.02); for (const s2 of [-1, 1]) d = smax(d, -ell(p, [s2 * 0.235, 1.32, 0], [0.065, 0.13, 0.12]), 0.02); return d; } }); rules.hivis = 'torso';
       add({ id: 'strips', color: '#e9edf0', mat: 'plastic', h: 0.009, lo: [-0.26, 1.04, -0.2], hi: [0.26, 1.4, 0.2], f: (p) => Math.max(shellTorso(p, 1.12, 1.02) - 0.003, Math.min(Math.abs(p[1] - 1.12), Math.abs(p[1] - 1.3)) - 0.013) }); rules.strips = 'torso';
       belt('#6a4a2e'); hands('#c99f6a'); feet('#4a3628', true); headgear('hat', '#f2c443', hardhatSDF()); L.extras = 'eng'; break;
-    case 'containment': head(); suit('#e2b52c', 1.12, false, ['gloves', 'shoes']); hands('#2b2b2b'); feet('#2b2b2b', true); belt('#2b2b2b'); headgear('hood', '#e2b52c', hoodSDF(), 'cloth'); L.hair = false; L.extras = 'hazmat'; break;
+    case 'containment': head(); suit('#e2b52c', 1.12, false, ['gloves', 'shoes'], 1.08, 1); hands('#2b2b2b'); feet('#2b2b2b', true); belt('#2b2b2b'); headgear('hood', '#e2b52c', hoodSDF(), 'cloth'); L.hair = false; L.extras = 'hazmat'; break;
     case 'dclass': head({ jaw: 0.072 }); suit('#e0782c', 1.02, true); forearms(); feet('#2b2b2e'); hands(); L.extras = 'dclass'; break;
     case 'chaos': case 'e11': { const C = kind === 'chaos' ? ['#5b5830', '#202125', '#2c2d32', '#1b1b1e', '#2d2e32', '#2e2f33'] : ['#3e4a57', '#64798c', '#4c5d6d', '#1e2329', '#64798c', '#4f6070'];
-      head({ jaw: 0.08 }); suit(C[0], 1.06, false, ['vest', 'gloves', 'shoes']); vest(C[1], C[2]); belt(); pads(C[1]); hands(C[3]); feet(C[3], true);
-      headgear('helmet', C[4], helmetSDF(0.045), 'plastic'); headgear('mask', C[5], maskSDF(), 'rubber'); L.hair = false; L.extras = 'mask'; L.eye = kind === 'chaos' ? '#ff2a1c' : '#8ff0ff'; L.armed = true; L.band = kind === 'e11' ? '#e0703a' : null; break; }
+      head({ jaw: 0.08 }); suit(C[0], 1.14, false, ['vest', 'gloves', 'shoes', 'pads'], 1.16, 1); vest(C[1], C[2]); shoulders(C[0]); belt(); pads(C[1]); hands(C[3]); feet(C[3], true);
+      headgear('helmet', C[4], helmetSDF(0.045), 'plastic'); headgear('mask', C[5], maskSDF(), 'rubber'); L.hair = false; L.extras = 'mask'; L.armOut = 0.12; L.eye = kind === 'chaos' ? '#ff2a1c' : '#8ff0ff'; L.armed = true; L.band = kind === 'e11' ? '#e0703a' : null; break; }
     default: // security
-      head({ jaw: 0.08 }); suit('#c3c8ce', 1.04, false, ['vest', 'gloves', 'shoes']); vest('#2c2f34', '#3c3f45'); belt(); pads('#2f3136'); hands('#2b2d31'); feet('#202226', true);
-      headgear('helmet', '#4a4e55', helmetSDF(0.04)); L.hair = false; L.extras = 'visor'; L.armed = true;
+      head({ jaw: 0.08 }); suit('#c3c8ce', 1.13, false, ['vest', 'gloves', 'shoes', 'pads'], 1.15, 1); vest('#2c2f34', '#3c3f45'); shoulders('#aeb3b9'); belt(); pads('#2f3136'); hands('#2b2d31'); feet('#202226', true);
+      headgear('helmet', '#4a4e55', helmetSDF(0.04)); L.hair = false; L.extras = 'visor'; L.armed = true; L.armOut = 0.12;
   }
   return { kind, parts, rules, L };
 }
@@ -46486,24 +46494,38 @@ function partGeo(part, rule, all) {
     col[i * 3] = ao * pc[0]; col[i * 3 + 1] = ao * pc[1]; col[i * 3 + 2] = ao * pc[2];
     const ax = Math.abs(N[i * 3]), ay = Math.abs(N[i * 3 + 1]), az = Math.abs(N[i * 3 + 2]); if (ay >= ax && ay >= az) { uv[i * 2] = p[0] * US; uv[i * 2 + 1] = p[2] * US; } else if (ax >= az) { uv[i * 2] = p[2] * US; uv[i * 2 + 1] = p[1] * US; } else { uv[i * 2] = p[0] * US; uv[i * 2 + 1] = p[1] * US; } }
   const geo = new THREE.BufferGeometry(); geo.setAttribute('position', new THREE.Float32BufferAttribute(P, 3)); geo.setAttribute('normal', new THREE.Float32BufferAttribute(N, 3)); geo.setAttribute('color', new THREE.Float32BufferAttribute(col, 3)); geo.setAttribute('uv', new THREE.Float32BufferAttribute(uv, 2)); geo.setIndex(I);
-  if (part.rigid === 'head') { geo.translate(-J.head[0], -J.head[1], -J.head[2]); return geo; }
+  if (part.rigid) { const jn = BONES.find((x) => x[0] === part.rigid)[2]; geo.translate(-J[jn][0], -J[jn][1], -J[jn][2]); return geo; }
   const si = new Uint16Array(n * 4), sw = new Float32Array(n * 4);
   for (let i = 0; i < n; i++) { const wv = weigh([P[i * 3], P[i * 3 + 1], P[i * 3 + 2]], rule); for (let k = 0; k < wv.length; k++) { si[i * 4 + k] = wv[k][0]; sw[i * 4 + k] = wv[k][1]; } }
   geo.setAttribute('skinIndex', new THREE.Uint16BufferAttribute(si, 4)); geo.setAttribute('skinWeight', new THREE.Float32BufferAttribute(sw, 4));
   return geo;
 }
-const HAIR_STYLES = ['part', 'short', 'bun', 'long', 'bald'];
+const HAIR_STYLES = ['part', 'short', 'bun', 'long', 'bald', 'buzz'];
+const FACES = [{ jaw: 0.068 }, { jaw: 0.08, nose: 1.15, chin: 0.026 }, { jaw: 0.062, nose: 0.85, long: 1.05 }, { jaw: 0.074, nose: 1.25, wide: 1.04 }, { jaw: 0.07, nose: 1.0, chin: 0.018, long: 0.96 }, { jaw: 0.084, nose: 1.1, wide: 1.06, chin: 0.027 }];
+const BEARDS = ['none', 'full', 'goatee', 'mustache', 'stubble'];
+function beardSDF(type, o) { const H = H0, jw = (o.jaw ?? 0.068) + 0.006, L = o.long ?? 1;
+  const mouth = (p) => ell(p, [0, H[1] - 0.057, H[2] + 0.09], [0.03, 0.014, 0.03]);
+  if (type === 'mustache') return (p) => smin(cap(p, [-0.024, H[1] - 0.046, H[2] + 0.086], [0, H[1] - 0.042, H[2] + 0.094], 0.006, 0.0075), cap(p, [0, H[1] - 0.042, H[2] + 0.094], [0.024, H[1] - 0.046, H[2] + 0.086], 0.0075, 0.006), 0.004);
+  if (type === 'goatee') return (p) => smax(smin(ell(p, [0, H[1] - 0.082 * L, H[2] + 0.05], [0.03, 0.03, 0.03]), cap(p, [-0.022, H[1] - 0.046, H[2] + 0.085], [0.022, H[1] - 0.046, H[2] + 0.085], 0.006, 0.006), 0.01), -mouth(p), 0.004);
+  const off = type === 'stubble' ? 0.0022 : 0.009;
+  return (p) => { let d = ell(p, [0, H[1] - 0.045 * L, H[2] + 0.018], [jw + off, 0.066 + off, 0.074 + off]); d = smax(d, (p[1] - (H[1] - 0.025)) + Math.max(0, -(p[2] - H[2] - 0.02)) * 0.0, 0.01); d = smax(d, -mouth(p), 0.004); return smax(d, -(p[2] - (H[2] - 0.03)), 0.01); };
+}
+const FACEK = { geos: new Map(), fs: [], queue: [], need(key) { if (!this.geos.has(key) && !this.queue.includes(key)) this.queue.push(key); },
+  step() { const key = this.queue.shift(); if (!key) return; const [kind, fi, bt] = key.split('|'); const o = FACES[+fi];
+    if (kind === 'h') { const f = headSDF(o); this.fs[+fi] = f; this.geos.set(key, partGeo({ id: 'skin', mat: 'skin', h: 0.0072, lo: [-0.12, 1.42, -0.13], hi: [0.12, 1.8, 0.14], f, paint: skinPaint }, null, f)); }
+    else this.geos.set(key, partGeo({ id: 'beard', mat: 'hair', h: 0.0045, lo: [-0.12, 1.5, -0.04], hi: [0.12, 1.65, 0.14], f: beardSDF(bt, o), rigid: 'head' }, null, () => 1)); } };
 function hairSDF2(style) { const base = hairSDF(style === 'part' ? 'part' : ''); const H = H0;
   if (style === 'bun') return (p) => Math.min(base(p), sph(p, [0, H[1] + 0.12, H[2] - 0.085], 0.042));
   if (style === 'long') return (p) => smin(base(p), smax(ell(p, [0, H[1] - 0.01, H[2] - 0.04], [0.1, 0.13, 0.09]), (p[2] - (H[2] + 0.02)), 0.02), 0.02);
-  if (style === 'bald') return (p) => smax(base(p), p[1] - (H[1] + 0.02), 0.01);
+  if (style === 'bald') return (p) => { const d = ell(p, [0, H[1] + 0.02, H[2] - 0.02], [0.095, 0.1, 0.105]); return smax(smax(d, p[1] - (H[1] + 0.035), 0.008), (p[2] - (H[2] + 0.03)), 0.01); }; // calvo: corona de pelo a los lados y detrás
+  if (style === 'buzz') return (p) => { const d = ell(p, [0, H[1] + 0.027, H[2] - 0.012], [0.092, 0.112, 0.102]); const hl = (p[1] - (H[1] + 0.06)) * 0.8 - (p[2] - H[2]) * 0.6 + 0.02, side = p[1] - H[1] + Math.max(0, p[2] - H[2] - 0.02) * 0.4; return smax(d, -Math.max(hl, side), 0.008); }; // rapado limpio
   return base; }
 /** Kit de un aspecto: se construye pieza a pieza (una por llamada a step) para no congelar el juego. */
 class Kit {
-  constructor(kind) { this.def = deptDef(kind); for (const pt of this.def.parts) pt.h *= pt.role === 'skin' && pt.id === 'skin' ? 1.3 : pt.rigid ? 1.5 : 2.0; this.queue = [...this.def.parts]; /* resolución de juego */ this.geos = new Map(); this.ready = false; this.tris = 0;
+  constructor(kind) { this.def = deptDef(kind); for (const pt of this.def.parts) pt.h *= pt.id === 'coat' || pt.id === 'jacket' ? 1.25 : pt.rigid ? 1.5 : 2.0; this.queue = this.def.parts.filter((p) => p.id !== 'skin'); /* resolución de juego; la cabeza va aparte (variantes) */ this.geos = new Map(); this.ready = false; this.tris = 0;
     const all = (p) => { let d = 1e9; for (const q of this.def.parts) { if (p[0] < q.lo[0] - 0.06 || p[0] > q.hi[0] + 0.06 || p[1] < q.lo[1] - 0.06 || p[1] > q.hi[1] + 0.06 || p[2] < q.lo[2] - 0.06 || p[2] > q.hi[2] + 0.06) continue; d = Math.min(d, q.f(p)); } return d; };
     this.all = all;
-    for (const part of this.def.parts) if (part.hideIn) { const f0 = part.f, cov = part.hideIn.map((id) => this.def.parts.find((q) => q.id === id)?.f).filter(Boolean); part.f = (p) => { let d = f0(p); for (const g of cov) d = Math.max(d, -(g(p) + 0.006)); return d; }; } }
+    for (const part of this.def.parts) if (part.hideIn) { const f0 = part.f, cov = part.hideIn.map((id) => this.def.parts.find((q) => q.id === id)?.f).filter(Boolean); part.f = (p) => { let d = f0(p); for (const g of cov) d = Math.max(d, -(g(p) + 0.012)); return d; }; } }
   step() { const part = this.queue.shift(); if (part) { const g = partGeo(part, this.def.rules[part.id], this.all); this.geos.set(part.id, g); this.tris += g.index.count / 3; } if (!this.queue.length) this.ready = true; return this.ready; }
 }
 const HAIRK = { geos: new Map(), queue: [...HAIR_STYLES], step() { const s = this.queue.shift(); if (s && s !== 'bald') this.geos.set(s, partGeo({ id: 'hair', mat: 'hair', h: 0.009, lo: [-0.13, 1.5, -0.2], hi: [0.13, 1.82, 0.14], f: hairSDF2(s), rigid: 'head' }, null, () => 1)); if (s === 'bald') this.geos.set(s, partGeo({ id: 'hair', mat: 'hair', h: 0.009, lo: [-0.13, 1.5, -0.2], hi: [0.13, 1.82, 0.14], f: hairSDF2(s), rigid: 'head' }, null, () => 1)); return !this.queue.length; } };
@@ -46512,8 +46534,11 @@ const HAIRK = { geos: new Map(), queue: [...HAIR_STYLES], step() { const s = thi
 const GEOC = {}; const gc = (k, f) => (GEOC[k] ??= f());
 const IRISC = new Map(); const irisMat = (col) => { let m = IRISC.get(col); if (!m) { m = new THREE.MeshPhysicalMaterial({ map: irisTexture(col), roughness: 0.25, clearcoat: 1, clearcoatRoughness: 0.05 }); IRISC.set(col, m); } return m; };
 function personLook(seed, kind) {
-  const r = (k, n) => ((seed >>> k) % n + n) % n;
-  return { skin: SKINS[r(0, SKINS.length)], hair: r(3, 9) === 0 ? '#9a9a9a' : HAIRS[r(4, HAIRS.length)], hairStyle: HAIR_STYLES[r(7, 4)] === 'bald' && kind !== 'administration' ? 'short' : HAIR_STYLES[r(7, HAIR_STYLES.length)], iris: IRIS[r(10, IRIS.length)],
+  const r = (k, n) => { let x = Math.imul((seed >>> 0) + k * 374761393, 668265263); x = Math.imul(x ^ (x >>> 15), 2246822519); x = (x ^ (x >>> 13)) >>> 0; return x % n; }; // mezcla: reparte bien caras, barbas y peinados
+  const guard = ['security', 'e11', 'chaos'].includes(kind); const face = guard ? [1, 3, 5][r(19, 3)] : r(19, FACES.length);
+  const beard = kind === 'chaos' || kind === 'e11' || kind === 'containment' ? 'none' : [BEARDS[0], BEARDS[0], BEARDS[1], BEARDS[2], BEARDS[3], BEARDS[4], BEARDS[0]][r(22, 7)];
+  const hairStyle = HAIR_STYLES[r(7, HAIR_STYLES.length)]; const beard2 = hairStyle === 'long' || hairStyle === 'bun' ? 'none' : beard;
+  return { face, beard: beard2, skin: SKINS[r(0, SKINS.length)], hair: r(3, 9) === 0 ? '#9a9a9a' : HAIRS[r(4, HAIRS.length)], hairStyle, iris: IRIS[r(10, IRIS.length)],
     glasses: (kind === 'research' && r(13, 2) === 0) || (kind === 'administration' && r(13, 4) === 0), smile: [0.004, 0, -0.002, 0.002][r(15, 4)], tablet: kind === 'research' && r(17, 3) !== 0 };
 }
 class Person {
@@ -46523,9 +46548,12 @@ class Person {
     for (const part of def.parts) {
       const geo = kit.geos.get(part.id); if (!geo) continue;
       const m = mat2(part.role === 'skin' ? 'skin' : part.mat, part.role === 'skin' ? look.skin : part.color, { vc: true });
-      if (part.rigid === 'head') { const o = new THREE.Mesh(geo, m); sk.byName.head.add(o); continue; }
+      if (part.rigid) { const o = new THREE.Mesh(geo, m); sk.byName[part.rigid].add(o); continue; }
+      if (part.id === 'skin') continue; // la cabeza la pone cada empleado (variantes de cara)
       const o = new THREE.SkinnedMesh(geo, m); o.frustumCulled = false; this.root.add(o); o.updateMatrixWorld(true); o.bind(sk.skeleton, o.matrixWorld);
     }
+    { const hg = FACEK.geos.get('h|' + look.face); const o = new THREE.SkinnedMesh(hg, mat2('skin', look.skin, { vc: true })); o.frustumCulled = false; this.root.add(o); o.updateMatrixWorld(true); o.bind(sk.skeleton, o.matrixWorld); }
+    if (look.beard !== 'none') { const bg = FACEK.geos.get('b|' + look.face + '|' + look.beard); if (bg) sk.byName.head.add(new THREE.Mesh(bg, look.beard === 'stubble' ? mat2('skin', new THREE.Color(look.skin).lerp(new THREE.Color(look.hair), 0.55).getStyle(), { vc: true, key: 'stub' }) : mat2('hair', look.hair, { vc: true }))); }
     if (def.L.hair) { const hg = HAIRK.geos.get(look.hairStyle); if (hg) sk.byName.head.add(new THREE.Mesh(hg, mat2('hair', look.hair, { vc: true }))); }
     this.rig = faceRig2(def, look, sk.byName.head); props2(def, look, sk, this.root);
     const sh = new THREE.Mesh(gc('shadow', () => new THREE.CircleGeometry(0.22, 24)), gc('shadowM', () => new THREE.MeshBasicMaterial({ color: 0x000000, transparent: true, opacity: 0.26, depthWrite: false })));
@@ -46551,8 +46579,8 @@ function faceRig2(def, look, head) {
     const brow = new THREE.Mesh(gc('brow' + s, () => new THREE.TubeGeometry(new THREE.CatmullRomCurve3([rel(s * 0.016, H[1] + 0.045, H[2] + 0.088), rel(s * 0.036, H[1] + 0.051, H[2] + 0.088), rel(s * 0.056, H[1] + 0.045, H[2] + 0.076)]), 10, 0.0042, 6)), mat2('hair', look.hair, {})); head.add(brow); rig.brows.push({ m: brow, s });
   }
   // boca: línea y labios sobre la superficie de la cara (geometría compartida por gesto)
-  const skinF = def.parts.find((q) => q.id === 'skin').f; const sm = look.smile;
-  const mouth = gc('mouth' + sm, () => { const surfZ = (x, y) => { let z = H[2] + 0.16; for (let i = 0; i < 80 && skinF([x, y, z]) > 0.0005; i++) z -= Math.max(0.0008, skinF([x, y, z])); return z; };
+  const skinF = FACEK.fs[look.face] ?? def.parts.find((q) => q.id === 'skin').f; const sm = look.smile;
+  const mouth = gc('mouth' + sm + '|' + look.face, () => { const surfZ = (x, y) => { let z = H[2] + 0.16; for (let i = 0; i < 80 && skinF([x, y, z]) > 0.0005; i++) z -= Math.max(0.0008, skinF([x, y, z])); return z; };
     const curve = (dy, off, wd) => new THREE.CatmullRomCurve3([-1, -0.5, 0, 0.5, 1].map((u) => { const x = u * wd, y = H[1] - 0.057 + dy + sm * u * u; return rel(x, y, surfZ(x, y) + off); }));
     return [new THREE.TubeGeometry(curve(0, 0.0012, 0.02), 16, 0.0013, 5), new THREE.TubeGeometry(curve(0.0028, -0.0008, 0.018), 16, 0.0026, 6), new THREE.TubeGeometry(curve(-0.0038, -0.0008, 0.015), 16, 0.0033, 6)]; });
   head.add(new THREE.Mesh(mouth[0], gc('mouthM', () => new THREE.MeshStandardMaterial({ color: '#4a2224', roughness: 0.7 }))));
@@ -46588,7 +46616,7 @@ function poseFor(frame, flags) {
 function pose(per, t, mode, ph, armedNow) {
   const ch = per; const b = ch.sk.byName; const R = (bn, x = 0, y = 0, z = 0) => b[bn].rotation.set(x, y, z);
   for (const k in b) b[k].rotation.set(0, 0, 0); b.hips.position.set(J.hips[0], J.hips[1], J.hips[2]);
-  const breathe = Math.sin(t * 2.1 + ph); R('chest', -0.02 - breathe * 0.012); R('uarmL', 0, 0, 0.07); R('uarmR', 0, 0, -0.07); R('farmL', -0.22); R('farmR', -0.22);
+  const breathe = Math.sin(t * 2.1 + ph); R('chest', -0.02 - breathe * 0.012); const ao = ch.kit.def.L.armOut ?? 0.04; R('uarmL', 0, 0, 0.07 + ao); R('uarmR', 0, 0, -0.07 - ao); R('farmL', -0.22); R('farmR', -0.22);
   if (mode === 'walk' || mode === 'run') {
     const sp = mode === 'run' ? 10.5 : 6.6, k = mode === 'run' ? 1.35 : 1; const w = t * sp + ph, s = Math.sin(w), c = Math.cos(w);
     b.hips.position.y = J.hips[1] - 0.012 - Math.abs(c) * 0.026 * k; b.hips.position.x = s * 0.018;
@@ -46617,9 +46645,9 @@ function pose(per, t, mode, ph, armedNow) {
     const c0 = chestP(); const tap = mode === 'carry' ? 0 : Math.sin(t * 9 + ph) * 0.015;
     reach(ch, 1, c0.clone().add(new THREE.Vector3(0.12, -0.24 + tap, 0.33)), new THREE.Vector3(1, -1, -0.3)); reach(ch, -1, c0.clone().add(new THREE.Vector3(-0.12, -0.24 - tap, 0.33)), new THREE.Vector3(-1, -1, -0.3));
   } else if (ch.sk.tablet && (mode === 'idle' || mode === 'walk')) {
-    const tab = ch.sk.tablet; tab.visible = true; const T = chestP().add(new THREE.Vector3(0.11, -0.3 + (mode === 'walk' ? Math.sin(t * 6.6 + ph) * 0.01 : 0), 0.3)); reach(ch, 1, T, new THREE.Vector3(1, -1, -0.4));
-    tab.position.copy(T).add(new THREE.Vector3(-0.03, 0.025, 0.02)); tab.rotation.set(-1.05, 0.35, 0.05);
-    if (mode === 'idle' && (t + ph) % 7 > 5) { const head = local(ch, b.head, new THREE.Vector3(0.0, 0.05, 0.12)); reach(ch, -1, head.add(new THREE.Vector3(-0.012, -0.035, 0.035)), new THREE.Vector3(-1, -1, 0)); }
+    const tab = ch.sk.tablet; tab.visible = true; const T = chestP().add(new THREE.Vector3(0.2, -0.3 + (mode === 'walk' ? Math.sin(t * 6.6 + ph) * 0.01 : 0), 0.26)); reach(ch, 1, T, new THREE.Vector3(1, -1, -0.6)); // tableta en una mano, al costado
+    tab.position.copy(T).add(new THREE.Vector3(-0.02, 0.025, 0.03)); tab.rotation.set(-1.0, 0.1, 0.05);
+    if (mode === 'idle' && (t + ph) % 7 > 4.5) b.head.rotation.x += 0.3; // consulta la tableta
   }
   if (ch.sk.tablet && !(mode === 'idle' || mode === 'walk')) ch.sk.tablet.visible = false;
   const shut = mode === 'lie' || (t * 1000 + ph * 500) % 4200 < 130; const lidRx = shut ? 1.3 : mode === 'fear' || mode === 'run' ? -0.6 : mode === 'work' || mode === 'sitwork' ? -0.15 : -0.4;
@@ -46640,9 +46668,11 @@ function boot() {
 const API = {
   enabled: true,
   /** ¿Hay modelo listo para este aspecto? (si no, se encarga y se usa la figura antigua mientras tanto) */
-  ready(dept, flags) { if (!API.enabled || !window.THREE) return false; const kind = dept === 'security' && flags.includes('t') ? 'e11' : dept; const k = kitFor(kind); return k.ready && !HAIRK.queue.length; },
+  ready(dept, flags, seed) { if (!API.enabled || !window.THREE) return false; const kind = dept === 'security' && flags.includes('t') ? 'e11' : dept; const k = kitFor(kind); const lk = personLook(seed, kind);
+    FACEK.need('h|' + lk.face); if (lk.beard !== 'none') FACEK.need('b|' + lk.face + '|' + lk.beard);
+    return k.ready && !HAIRK.queue.length && FACEK.geos.has('h|' + lk.face) && (lk.beard === 'none' || FACEK.geos.has('b|' + lk.face + '|' + lk.beard)); },
   /** Construcción repartida: una pieza por fotograma como mucho (~5-60 ms). */
-  tick() { if (!window.THREE) return; const t0 = performance.now(); while (performance.now() - t0 < 12) { if (HAIRK.queue.length) { HAIRK.step(); continue; } const k = WANT.find((x) => !x.ready); if (!k) break; k.step(); } return WANT.some((x) => !x.ready) || HAIRK.queue.length > 0; },
+  tick() { if (!window.THREE) return; const t0 = performance.now(); while (performance.now() - t0 < 12) { if (HAIRK.queue.length) { HAIRK.step(); continue; } if (FACEK.queue.length) { FACEK.step(); continue; } const k = WANT.find((x) => !x.ready); if (!k) break; k.step(); } return WANT.some((x) => !x.ready) || HAIRK.queue.length > 0 || FACEK.queue.length > 0; },
   render(g, view, people, now) {
     if (!people.length || !g?.three || !g.R) return; if (!booted) boot();
     const o = view.o; cam.fov = 36; cam.aspect = o.w / o.h; cam.near = Math.max(0.3, o.dist * 0.05); cam.far = o.dist * 6 + 180; cam.position.set(o.eye[0], o.eye[1], o.eye[2]); cam.up.set(0, 1, 0); cam.lookAt(o.tu, 0, o.tv); cam.updateProjectionMatrix();
@@ -46660,6 +46690,16 @@ const API = {
     const R = g.R; R.render(scene, cam);
   },
   buildAll() { for (const k of ['research', 'security', 'e11', 'chaos', 'medical', 'administration', 'engineering', 'containment', 'dclass']) kitFor(k); const out = {}; let t0 = performance.now(); while (HAIRK.queue.length) HAIRK.step(); out.hair = Math.round(performance.now() - t0); for (const k of KITS.values()) { t0 = performance.now(); const per = []; while (!k.ready) { const t1 = performance.now(); const id = k.queue[0]?.id; k.step(); per.push(id + ':' + Math.round(performance.now() - t1)); } out[k.def.kind] = Math.round(performance.now() - t0) + 'ms ' + Math.round(k.tris / 1000) + 'k [' + per.join(' ') + ']'; } return out; },
+  /** Vista previa para revisar personajes (no se usa en el juego). */
+  preview(list, opt = {}) {
+    for (const [kind] of list) kitFor(kind); while (HAIRK.queue.length) HAIRK.step(); for (const k of KITS.values()) while (!k.ready) k.step();
+    for (const [kind, seed] of list) { const lk = personLook(seed, kind); FACEK.need('h|' + lk.face); if (lk.beard !== 'none') FACEK.need('b|' + lk.face + '|' + lk.beard); } while (FACEK.queue.length) FACEK.step();
+    const W = opt.w ?? 1400, Hh = opt.h ?? 600; const R = API._pr ??= new THREE.WebGLRenderer({ antialias: true, preserveDrawingBuffer: true }); R.setSize(W, Hh); R.setClearColor('#c9cbcd');
+    if (!booted) boot(); const sc = new THREE.Scene(); for (const c of scene.children) if (c.isLight) sc.add(c.clone());
+    const ps = list.map(([kind, seed], i) => { const p = new Person(KITS.get(kind), personLook(seed, kind)); p.root.scale.setScalar(1); p.root.position.set((i - (list.length - 1) / 2) * 0.62, 0, 0); sc.add(p.root); pose(p, opt.t ?? 1.3, opt.mode ?? 'idle', seed % 7, false); return p; });
+    const c = new THREE.PerspectiveCamera(opt.fov ?? 20, W / Hh, 0.05, 50); const tz = opt.face ? 1.62 : 1.0; c.position.set(0, tz + (opt.face ? 0.05 : 0.5), opt.dist ?? (opt.face ? 2.1 : 6)); c.lookAt(0, tz, 0);
+    R.render(sc, c); const url = R.domElement.toDataURL('image/png'); for (const p of ps) sc.remove(p.root); return url;
+  },
   stats() { return { kits: [...KITS.values()].map((k) => k.def.kind + (k.ready ? ' ✓' : ' …') + ' ' + Math.round(k.tris / 1000) + 'k'), pool: POOL.size }; },
 };
 return API;
