@@ -27614,16 +27614,19 @@ function drawEngineer(ctx, { back, frame, skin, hair, flags }) {
 
 const FLAT_SKIN = ['#f4bf9a', '#eea47a', '#d98a60', '#a8684c', '#76483a'];
 const FLAT_HAIR = ['#2a1d17', '#4b2e22', '#7a4a2c', '#c9a15e', '#17171a', '#8a8a8e'];
-const FLAT_HALO = '#151a20';
+const FLAT_HALO = '#24272c'; // Fase 56: contorno fino (estilo 3D suave)
 
 const FLAT_LOOKS = {
   dclass: {
     suit: '#e0782c', suitD: '#c2611d', legs: '#e0782c', legsD: '#c2611d', shoe: '#2b2b2e', hand: null,
   },
+  // Fase 56 (estilo EG2): Seguridad como la imagen de referencia: uniforme oliva, chaleco portaplacas negro,
+  // casco negro y máscara de gas con ojos rojos luminosos; figura robusta.
   security: {
-    suit: '#cdd1d6', suitD: '#adb2b9', legs: '#b9bdc4', legsD: '#9da2aa',
-    shoe: '#24262a', boot: true, hand: '#2b2d31', helmet: '#4a4e55', helmetD: '#3a3d43', visor: '#f2c230',
-    vest: '#2a2c30', vestD: '#202226', pouch: '#3c3f45', knee: '#2f3136', hair: false,
+    suit: '#6e6939', suitD: '#58542d', legs: '#686436', legsD: '#524f2b',
+    shoe: '#1d1d20', boot: true, hand: '#1f2023', helmet: '#2d2e32', helmetD: '#1f2023', visor: '#ff2d20',
+    vest: '#202125', vestD: '#17181b', pouch: '#2c2d32', knee: '#1c1d20', hair: false, chunky: true,
+    mask: '#2e2f33', maskD: '#1d1e21', lens: '#ff2a1c', lensL: '#ffc2b5', filter: '#3b3c41', glow: '255,45,30', mag: '#26272b', gun: '#1e1f22',
   },
   research: {
     coat: '#eef0f2', coatD: '#d6dade', lapel: '#ffffff', shirt: '#8ea7da', legs: '#8d8997', legsD: '#76727f',
@@ -27645,10 +27648,11 @@ const FLAT_LOOKS = {
   // Fase 48: Insurgencia del Caos (según la imagen de referencia): uniforme oliva, casco oscuro,
   // máscara de gas con lentes rojas redondas y filtro, chaleco negro con bolsillos, rodilleras y botas.
   chaos: {
-    suit: '#5b5a3c', suitD: '#4a4930', legs: '#55543a', legsD: '#45442e',
-    shoe: '#1c1b18', boot: true, hand: '#1f1f1c', helmet: '#2b2c28', helmetD: '#1f201d', visor: '#d0302a',
-    vest: '#1d1e1c', vestD: '#151614', pouch: '#2c2d2a', knee: '#1b1c1a', hair: false,
-    mask: '#33342f', maskD: '#24251f', lens: '#d0302a', lensL: '#ff8a7a', filter: '#3e3f39', mag: '#5c7484',
+    // Fase 56: se distingue de Seguridad (que ahora lleva oliva y ojos rojos): gris carbón, chaleco caqui, lentes ámbar y brazalete rojo
+    suit: '#4b4842', suitD: '#3b3934', legs: '#46433d', legsD: '#383631',
+    shoe: '#1f1e1b', boot: true, hand: '#24231f', helmet: '#3b3a33', helmetD: '#2a2924', visor: '#ffab1f',
+    vest: '#6e6140', vestD: '#584d33', pouch: '#7d6e4a', knee: '#2a2925', hair: false, chunky: true,
+    mask: '#2c2b27', maskD: '#1e1d1a', lens: '#ffa51c', lensL: '#fff1b8', filter: '#4a4840', glow: '255,170,30', mag: '#5a5240', gun: '#24231f', band: '#c0392b',
   },
   containment: {
     suit: '#e8c64c', suitD: '#c9a733', legs: '#e8c64c', legsD: '#c9a733', shoe: '#222428', boot: true,
@@ -27684,8 +27688,8 @@ function drawFlatPerson(ctx, dept, { back, frame, skinI, hairI, flags, varI = 0 
   const P = cartoonPose(frame, flags, varI);
   const armed = flags.includes('g') || frame === 'aim' || frame === 'fire' || frame.startsWith('p');
   if (armed && P.pose === 'free') P.pose = 'ready';
-  ctx.fillStyle = 'rgba(0,0,0,0.33)';
-  ctx.beginPath(); ctx.ellipse(0, 0, 8.5, 3.4, 0, 0, 7); ctx.fill();
+  { const g = ctx.createRadialGradient(0, 0, 0, 0, 0, 10); g.addColorStop(0, 'rgba(0,0,0,0.42)'); g.addColorStop(0.6, 'rgba(0,0,0,0.24)'); g.addColorStop(1, 'rgba(0,0,0,0)');
+    ctx.save(); ctx.scale(1, 0.4); ctx.fillStyle = g; ctx.beginPath(); ctx.arc(1.5, 0, 10, 0, 7); ctx.fill(); ctx.restore(); } // Fase 56
   for (const halo of [true, false]) {
     ctx.save();
     flatFigure(ctx, { L, T, P, dept, back, frame, skin, skinD, hairCol, lod, halo, armed, flags });
@@ -27693,18 +27697,41 @@ function drawFlatPerson(ctx, dept, { back, frame, skinI, hairI, flags, varI = 0 
   }
 }
 
+// Fase 56 (estilo EG2): cada pieza recibe sombra interior abajo-derecha y brillo arriba-izquierda,
+// lo que da el aspecto de figura 3D suave de la imagen de referencia. Se dibuja una vez y queda en caché.
+function vol3d(ctx, path, lod, k = 1) {
+  const s = ctx.getTransform().a;
+  if (s < 0.45) return;
+  ctx.save();
+  ctx.beginPath(); path(); ctx.clip();
+  const pass = (c, dx, dy, blur) => {
+    ctx.beginPath(); path(); ctx.rect(-160, -200, 320, 320); // path() puede empezar con beginPath (roundRect)
+    ctx.shadowColor = c; ctx.shadowBlur = blur * s; ctx.shadowOffsetX = dx * s; ctx.shadowOffsetY = dy * s;
+    ctx.fillStyle = '#000'; ctx.fill('evenodd');
+  };
+  pass(`rgba(0,0,0,${0.34 * k})`, -1.5, -1.7, 2.6);
+  if (!lod) pass(`rgba(255,255,255,${0.30 * k})`, 0.9, 1.0, 1.4);
+  ctx.restore();
+}
+
 function flatFigure(ctx, o) {
   const { L, T, P, dept, back, frame, skin, skinD, hairCol, lod, halo, armed } = o;
-  const HW = lod ? 1.9 : 1.5;                         // grosor del halo
+  const HW = lod ? 1.3 : 0.9;                         // Fase 56: contorno fino
   const col = (c) => (halo ? FLAT_HALO : c);
   const fill = (path, c) => {
     ctx.beginPath(); path(); ctx.fillStyle = col(c); ctx.fill();
     if (halo) { ctx.lineWidth = HW; ctx.lineJoin = 'round'; ctx.strokeStyle = FLAT_HALO; ctx.stroke(); }
+    else vol3d(ctx, path, lod);
   };
   const tube = (pts, w, c) => {
     ctx.lineCap = 'round'; ctx.lineJoin = 'round';
-    ctx.strokeStyle = col(c); ctx.lineWidth = w + (halo ? HW : 0);
-    ctx.beginPath(); ctx.moveTo(pts[0][0], pts[0][1]); for (const p of pts.slice(1)) ctx.lineTo(p[0], p[1]); ctx.stroke();
+    const line = (wd, cc, ox = 0, oy = 0) => { ctx.strokeStyle = cc; ctx.lineWidth = wd; ctx.beginPath(); ctx.moveTo(pts[0][0] + ox, pts[0][1] + oy); for (const p of pts.slice(1)) ctx.lineTo(p[0] + ox, p[1] + oy); ctx.stroke(); };
+    if (halo || typeof c !== 'string' || c[0] !== '#') line(w + (halo ? HW : 0), col(c));
+    else { // Fase 56: cilindro con luz desde arriba a la izquierda
+      line(w, shade(c, -0.24));
+      line(w * 0.64, c, -w * 0.13, -w * 0.09);
+      if (!lod) line(w * 0.24, shade(c, 0.22), -w * 0.25, -w * 0.17);
+    }
     ctx.lineCap = 'butt';
   };
   const dot = (x, y, r, c) => fill(() => ctx.ellipse(x, y, r, r, 0, 0, 7), c);
@@ -27727,12 +27754,13 @@ function flatFigure(ctx, o) {
   ctx.translate(0, P.bob + P.crouch);
   if (P.lean) ctx.transform(1, 0, -P.lean, 1, 0, 0);
   const bulky = !!L.bulky;
+  const chunky = !!L.chunky;                            // Fase 56: soldados anchos (estilo EG2)
   const sh = -30;                                       // línea de hombros
   const hp = -18 + P.crouch * 0.35;                     // cadera
-  const legW = bulky ? 5.4 : 3.7;
-  const armW = bulky ? 4.6 : 3;
+  const legW = bulky ? 5.4 : chunky ? 4.8 : 4;
+  const armW = bulky ? 4.6 : chunky ? 4 : 3.3;
   const leg = (near, d) => {
-    const hx = (near ? -2.2 : 2.3) * (bulky ? 1.25 : 1);
+    const hx = (near ? -2.2 : 2.3) * (bulky ? 1.25 : chunky ? 1.18 : 1);
     const fx = hx + d * 0.9 + (near ? -0.2 : 0.3);
     // Fase 54G: el cuerpo baja P.crouch al agacharse o sentarse, pero los pies siguen en el suelo: la rodilla se dobla hacia delante
     const C = P.crouch; const kx = hx + d * 0.55 + 0.5 + C * 0.5;
@@ -27744,11 +27772,12 @@ function flatFigure(ctx, o) {
     if (bulky && !halo) { ctx.strokeStyle = L.tape; ctx.lineWidth = 1.6; ctx.beginPath(); ctx.moveTo(fx - 2.7, -7.6); ctx.lineTo(fx + 2.7, -7.4); ctx.stroke(); } // cinta del tobillo
     if (dept === 'engineering' && detail) { ctx.strokeStyle = L.strip; ctx.lineWidth = 1; ctx.beginPath(); ctx.moveTo(kx - 1.9, ky + 2.4); ctx.lineTo(kx + 1.9, ky + 2.6); ctx.stroke(); }
     const sc = near ? L.shoe : shade(L.shoe, -0.1);
-    if (L.boot) rect(fx - 2.1 - (bulky ? 0.6 : 0), -6.2 - (bulky ? 0.6 : 0), 4.2 + (bulky ? 1.2 : 0), 5 + (bulky ? 0.6 : 0), 1.4, sc);
-    fill(() => { ctx.moveTo(fx - 2.4, -0.1); ctx.lineTo(fx - 2.4, -2.9); ctx.quadraticCurveTo(fx + 0.4, -3.9, fx + 3.6, -1.6); ctx.quadraticCurveTo(fx + 4.1, -0.1, fx + 3.2, -0.1); ctx.closePath(); }, sc);
+    const bb = bulky || chunky ? 0.6 : 0;
+    if (L.boot) rect(fx - 2.1 - bb, -6.6 - bb, 4.2 + bb * 2, 5.4 + bb, 1.4, sc);
+    fill(() => { ctx.moveTo(fx - 2.4 - bb, -0.1); ctx.lineTo(fx - 2.4 - bb, -3.1); ctx.quadraticCurveTo(fx + 0.4, -4.1 - bb, fx + 3.8 + bb, -1.8); ctx.quadraticCurveTo(fx + 4.3 + bb, -0.1, fx + 3.4 + bb, -0.1); ctx.closePath(); }, sc);
     ctx.restore();
   };
-  const shoulder = (near) => [near ? -4.7 - (bulky ? 1.6 : 0) : 4.7 + (bulky ? 1.6 : 0), sh + 1.6];
+  const shoulder = (near) => [near ? -4.7 - (bulky ? 1.6 : chunky ? 1.1 : 0) : 4.7 + (bulky ? 1.6 : chunky ? 1.1 : 0), sh + 1.6];
   const armPts = (near) => {
     const [sx, sy] = shoulder(near);
     const side = near ? -1 : 1;
@@ -27785,7 +27814,8 @@ function flatFigure(ctx, o) {
       const k = 0.78; const wx = e[0] + (h[0] - e[0]) * k; const wy = e[1] + (h[1] - e[1]) * k;
       dot(wx, wy, 2.6, near ? L.tape : shade(L.tape, -0.1));                         // puño del guante
     }
-    dot(h[0], h[1] + 0.4, bulky ? 3.1 : 2.5, handCol(near));
+    if (L.band && !halo) { const m = [pts[0][0] + (pts[1][0] - pts[0][0]) * 0.5, pts[0][1] + (pts[1][1] - pts[0][1]) * 0.5]; ctx.fillStyle = near ? L.band : shade(L.band, -0.2); ctx.beginPath(); ctx.ellipse(m[0], m[1], armW * 0.55, armW * 0.38, 0, 0, 7); ctx.fill(); } // Fase 56
+    dot(h[0], h[1] + 0.4, bulky ? 3.1 : chunky ? 2.9 : 2.6, handCol(near));
     if (near && !halo && P.pose === 'hammer') { ctx.strokeStyle = '#8d959c'; ctx.lineWidth = 1.6; ctx.lineCap = 'round'; ctx.beginPath(); ctx.moveTo(h[0], h[1]); ctx.lineTo(h[0] + 3.5, h[1] - (P.hUp ? 4 : 1)); ctx.stroke(); ctx.lineCap = 'butt'; } // Fase 54C: llave
     if (near && !halo && P.pose === 'eat') { ctx.fillStyle = '#f0f0ea'; ctx.fillRect(h[0] - 1.4, h[1] - 3.4, 2.8, 3); } // taza
     if (!halo && P.seat && P.pose === 'work' && near && !back) { ctx.fillStyle = '#20282e'; roundRect(ctx, -1, sh + 6.5, 12, 2.4, 0.8); ctx.fill(); } // teclado
@@ -27814,14 +27844,14 @@ function flatFigure(ctx, o) {
     for (let i = 0; i < 8; i++) { const a = (i / 8) * Math.PI * 2; const r = i % 2 ? 1.8 : 4.4; ctx.lineTo(20 + Math.cos(a) * r, sh + 4.4 + Math.sin(a) * r); }
     ctx.closePath(); ctx.fill();
   }
-  if (armed && back && !halo) { ctx.strokeStyle = dept === 'chaos' ? '#1e1f1d' : '#4f6573'; ctx.lineWidth = 3; ctx.lineCap = 'round'; ctx.beginPath(); ctx.moveTo(-4.6, sh + 0.6); ctx.lineTo(4.4, sh + 11); ctx.stroke(); ctx.lineCap = 'butt'; }
+  if (armed && back && !halo) { ctx.strokeStyle = dept === 'chaos' || L.gun ? (L.gun ?? '#1e1f1d') : '#4f6573'; ctx.lineWidth = 3; ctx.lineCap = 'round'; ctx.beginPath(); ctx.moveTo(-4.6, sh + 0.6); ctx.lineTo(4.4, sh + 11); ctx.stroke(); ctx.lineCap = 'butt'; }
 }
 
 function flatTorso(ctx, o, k) {
   const { L, dept, back, P } = o;
   const { fill, rect, dot, detail, sh, hp } = k;
   const bulky = !!L.bulky;
-  const W = bulky ? 7 : 5.8;
+  const W = bulky ? 7 : L.chunky ? 6.7 : 6;
   const torso = (c, bottom = hp + 0.8, flare = 0) => fill(() => {
     ctx.moveTo(-W, sh + 2); ctx.quadraticCurveTo(-W, sh - 0.6, -W + 2.4, sh - 0.6); ctx.lineTo(W - 2.4, sh - 0.6);
     ctx.quadraticCurveTo(W, sh - 0.6, W, sh + 2); ctx.lineTo(W - 1.2 + flare, bottom); ctx.lineTo(-W + 1.2 - flare, bottom); ctx.closePath();
@@ -27902,17 +27932,33 @@ function flatTorso(ctx, o, k) {
       }
       break;
     }
-    default: { // security: mono gris claro y chaleco portaplacas negro con bolsillos grandes
+    case 'dclass': { // Fase 56: mono naranja con cuello y placa de número
+      torso(L.suit, hp + 1.2);
+      farShade(L.suitD, hp + 1.2);
+      if (!back && !o.halo) {
+        ctx.fillStyle = L.suitD; ctx.beginPath(); ctx.moveTo(-2.4, sh - 0.6); ctx.lineTo(0.5, sh + 3.4); ctx.lineTo(3, sh - 0.6); ctx.closePath(); ctx.fill();
+        ctx.fillStyle = '#f4f1ea'; roundRect(ctx, -4.6, sh + 4.4, 3.8, 2.4, 0.5); ctx.fill();
+        ctx.fillStyle = '#2b2b2e'; ctx.fillRect(-4.1, sh + 5.2, 2.8, 0.7);
+        ctx.fillStyle = L.suitD; ctx.fillRect(0.3, sh + 1, 0.7, hp - sh - 1);
+      } else if (!o.halo) { ctx.fillStyle = '#2b2b2e'; ctx.font = '700 4.2px sans-serif'; ctx.textAlign = 'center'; ctx.fillText('D', 0.4, sh + 7.6); }
+      rect(-W + 0.6, hp - 1.2, 2 * W - 1.2, 1.6, 0.6, L.suitD);
+      break;
+    }
+    default: { // security / chaos: uniforme y chaleco portaplacas con bolsillos grandes
       torso(L.suit, hp + 1);
       farShade(L.suitD, hp + 1);
       fill(() => { ctx.moveTo(-W + 0.4, sh + 1); ctx.lineTo(-2, sh + 0.2); ctx.lineTo(2.6, sh + 0.2); ctx.lineTo(W - 0.4, sh + 1); ctx.lineTo(W - 0.8, hp - 1.2); ctx.lineTo(-W + 0.8, hp - 1.2); ctx.closePath(); }, L.vest);
       if (!o.halo) {
         ctx.fillStyle = L.vestD; ctx.fillRect(1.4, sh + 0.8, W - 2.4, hp - sh - 2.2);
         ctx.fillStyle = L.pouch;
-        if (!back) for (let i = 0; i < 3; i++) ctx.fillRect(-4.2 + i * 2.9, sh + 6.6, 2.3, 3.4);
-        else ctx.fillRect(-3.6, sh + 2.4, 7.2, 3);
-        if (!back) ctx.fillRect(-4.6, sh + 2, 9.2, 1.6);
+        if (!back) for (let i = 0; i < 3; i++) { roundRect(ctx, -4.4 + i * 3.1, sh + 6.4, 2.6, 3.8, 0.6); ctx.fill(); }
+        else { roundRect(ctx, -3.8, sh + 2.4, 7.6, 3.4, 0.8); ctx.fill(); }
+        if (!back) ctx.fillRect(-4.8, sh + 2, 9.6, 1.6);
+        ctx.fillStyle = 'rgba(255,255,255,0.10)'; for (let i = 0; i < 3 && !back; i++) ctx.fillRect(-4.2 + i * 3.1, sh + 6.6, 2.2, 0.6);
+        ctx.fillStyle = '#141417'; ctx.fillRect(-W + 0.6, hp - 1.6, 2 * W - 1.2, 1.8);              // cinturón
+        ctx.fillStyle = '#5b5b60'; ctx.fillRect(-0.6, hp - 1.5, 2, 1.6);                               // hebilla
       }
+      if (!back) { rect(-W - 0.2, sh - 0.4, 3.2, 3, 1.2, L.vestD); rect(W - 3, sh - 0.4, 3.2, 3, 1.2, L.vestD); } // hombreras
     }
   }
 }
@@ -27941,7 +27987,7 @@ function flatHead(ctx, o, k) {
     return;
   }
   rect(cx - 1.4, sh - 3.4, 3, 3.6, 0.8, skinD);
-  if ((dept === 'security' || dept === 'chaos') && !halo) { ctx.fillStyle = '#1f2125'; roundRect(ctx, cx - 2.1, sh - 2.6, 4.4, 2.8, 1); ctx.fill(); } // braga de cuello negra
+  if ((dept === 'security' || dept === 'chaos') && !halo) { ctx.fillStyle = '#1f2125'; roundRect(ctx, cx - 2.6, sh - 2.8, 5.4, 3, 1); ctx.fill(); } // braga de cuello negra
   const showHair = !['security', 'engineering', 'chaos'].includes(dept);
   if (showHair && !halo) flatHairBack(ctx, T.hair, cx, cy, hairCol, back);
   else if (showHair && halo && (T.hair === 'long' || T.hair === 'afro' || T.hair === 'bun')) flatHairBack(ctx, T.hair, cx, cy, FLAT_HALO, back, 0.7);
@@ -27950,28 +27996,31 @@ function flatHead(ctx, o, k) {
   if (!halo && !back) {
     ctx.fillStyle = 'rgba(120,60,40,0.12)'; ctx.beginPath(); ctx.ellipse(cx + 2.6, cy + 0.6, 2.6, 5.2, 0, -Math.PI / 2, Math.PI / 2); ctx.fill();
   }
-  if (!back && !halo && dept !== 'chaos') flatFace(ctx, o, cx + 1.1, cy, lod);
+  if (!back && !halo && dept !== 'chaos' && dept !== 'security') flatFace(ctx, o, cx + 1.1, cy, lod);
   if (showHair && !halo) flatHairFront(ctx, T.hair, cx, cy, hairCol, back);
   if (dept === 'medical') {
     fill(() => { ctx.ellipse(cx + 0.2, cy - 2.6, 5.7, 4.6, 0, Math.PI, Math.PI * 2); ctx.lineTo(cx + 5.9, cy - 1.6); ctx.lineTo(cx - 5.5, cy - 1.6); ctx.closePath(); }, L.cap);
     if (!back && !halo) { ctx.fillStyle = L.mask; roundRect(ctx, cx - 3.4, cy + 6.2, 7.6, 2.2, 1); ctx.fill(); }   // mascarilla bajada al cuello
   }
-  if (dept === 'security') {
+  if (dept === 'security' && !L.mask) {
     fill(() => { ctx.moveTo(cx - 6, cy - 0.6); ctx.bezierCurveTo(cx - 6.4, cy - 10.4, cx + 6.8, cy - 10.4, cx + 6.4, cy - 0.6); ctx.closePath(); }, L.helmet);
     if (!halo) { ctx.fillStyle = L.helmetD; ctx.beginPath(); ctx.moveTo(cx + 1.6, cy - 7.6); ctx.bezierCurveTo(cx + 5, cy - 7.4, cx + 6.6, cy - 4, cx + 6.4, cy - 0.6); ctx.lineTo(cx + 3.6, cy - 0.6); ctx.closePath(); ctx.fill(); }
     rect(cx - 6.6, cy - 1.4, 13.6, 2, 1, L.helmetD);
     if (!back && !halo) { ctx.fillStyle = L.visor; ctx.globalAlpha = 0.88; roundRect(ctx, cx - 3.2, cy - 0.6, 8.4, 3.2, 1.4); ctx.fill(); ctx.globalAlpha = 1; ctx.fillStyle = '#ffe58a'; ctx.fillRect(cx - 2.2, cy - 0.1, 2.4, 0.7); }
   }
-  if (dept === 'chaos') { // máscara de gas completa + casco oscuro
+  if (dept === 'chaos' || (dept === 'security' && L.mask)) { // máscara de gas completa + casco oscuro (Fase 56: también Seguridad)
     ell(cx + 0.2, cy + 0.6, 5.6, 6.2, L.mask);
     if (!back) {
-      ell(cx + 2.4, cy + 5.4, 2.6, 2.4, L.filter);                                   // filtro
+      ell(cx + 2.4, cy + 5.6, 2.8, 2.6, L.filter);                                   // filtro
       if (!halo) {
-        ctx.fillStyle = L.maskD; ctx.beginPath(); ctx.ellipse(cx + 2.4, cy + 5.4, 1.4, 1.3, 0, 0, 7); ctx.fill();
-        for (const x of [cx - 1.9, cx + 2.5]) {                                       // lentes rojas grandes
-          ctx.fillStyle = '#121210'; ctx.beginPath(); ctx.ellipse(x, cy - 0.2, 2.35, 2.35, 0, 0, 7); ctx.fill();
-          ctx.fillStyle = L.lens; ctx.beginPath(); ctx.ellipse(x, cy - 0.2, 1.75, 1.75, 0, 0, 7); ctx.fill();
-          if (!lod) { ctx.fillStyle = L.lensL; ctx.beginPath(); ctx.ellipse(x - 0.6, cy - 0.8, 0.55, 0.5, 0, 0, 7); ctx.fill(); }
+        ctx.fillStyle = L.maskD; ctx.beginPath(); ctx.ellipse(cx + 2.4, cy + 5.6, 1.5, 1.4, 0, 0, 7); ctx.fill();
+        ctx.strokeStyle = L.maskD; ctx.lineWidth = 0.5; for (let i = -1; i <= 1; i++) { ctx.beginPath(); ctx.moveTo(cx + 1.3, cy + 5.6 + i * 0.7); ctx.lineTo(cx + 3.5, cy + 5.6 + i * 0.7); ctx.stroke(); }
+        for (const x of [cx - 1.9, cx + 2.5]) {                                       // lentes grandes y luminosas
+          ctx.fillStyle = '#121210'; ctx.beginPath(); ctx.ellipse(x, cy - 0.2, 2.45, 2.45, 0, 0, 7); ctx.fill();
+          if (L.glow) { const g = ctx.createRadialGradient(x, cy - 0.2, 0.5, x, cy - 0.2, 4.2); g.addColorStop(0, `rgba(${L.glow},0.55)`); g.addColorStop(1, `rgba(${L.glow},0)`); ctx.fillStyle = g; ctx.beginPath(); ctx.arc(x, cy - 0.2, 4.2, 0, 7); ctx.fill(); }
+          ctx.fillStyle = L.lens; ctx.beginPath(); ctx.ellipse(x, cy - 0.2, 1.85, 1.85, 0, 0, 7); ctx.fill();
+          if (L.glow) { ctx.fillStyle = 'rgba(255,235,220,0.75)'; ctx.beginPath(); ctx.ellipse(x, cy - 0.2, 0.8, 0.8, 0, 0, 7); ctx.fill(); }
+          if (!lod) { ctx.fillStyle = L.lensL; ctx.beginPath(); ctx.ellipse(x - 0.7, cy - 0.9, 0.55, 0.5, 0, 0, 7); ctx.fill(); }
         }
       }
     } else if (!halo) { ctx.strokeStyle = '#151614'; ctx.lineWidth = 1; ctx.beginPath(); ctx.moveTo(cx - 5, cy + 1); ctx.lineTo(cx + 5, cy + 1); ctx.stroke(); } // correas
@@ -28087,8 +28136,9 @@ function flatRifle(ctx, o, k) {
   const { fill, dot, sh } = k;
   ctx.save();
   if (P.pose === 'aim') ctx.translate(3, sh + 3.6); else { ctx.translate(-1.2, sh + 8.4); ctx.rotate(-0.45); }
-  const ci = o.dept === 'chaos';
-  fill(() => { ctx.moveTo(-5, -1.6); ctx.lineTo(9, -2.2); ctx.lineTo(11.6, -1); ctx.lineTo(16, -1); ctx.lineTo(16, 0.6); ctx.lineTo(9, 0.8); ctx.lineTo(7, 3.6); ctx.lineTo(2, 3.6); ctx.lineTo(-1, 1.6); ctx.lineTo(-5, 2.2); ctx.closePath(); }, ci ? '#1e1f1d' : '#4f6573');
+  const ci = o.dept === 'chaos' || !!o.L.gun; // Fase 56: carabina negra para Seguridad e Insurgencia
+  fill(() => { ctx.moveTo(-5.4, -1.8); ctx.lineTo(9, -2.4); ctx.lineTo(11.6, -1.2); ctx.lineTo(17, -1.2); ctx.lineTo(17, 0.7); ctx.lineTo(9, 1); ctx.lineTo(7, 3.8); ctx.lineTo(2, 3.8); ctx.lineTo(-1, 1.8); ctx.lineTo(-5.4, 2.6); ctx.closePath(); }, ci ? (o.L.gun ?? '#1e1f1d') : '#4f6573');
+  if (ci && !halo) { ctx.fillStyle = '#3a3b40'; ctx.fillRect(1, -3.6, 5.4, 1.3); ctx.fillRect(1.6, -4.6, 1, 1.2); ctx.fillRect(5.4, -4.6, 1, 1.2); ctx.fillStyle = '#4a4b50'; ctx.fillRect(10, -0.9, 6.6, 0.5); } // asa de transporte y guardamanos
   if (ci) { if (!halo) { ctx.fillStyle = o.L.mag; ctx.beginPath(); ctx.moveTo(3.4, 2.6); ctx.lineTo(6, 2.6); ctx.lineTo(5.2, 7.4); ctx.lineTo(2.8, 7); ctx.closePath(); ctx.fill(); ctx.fillStyle = '#34352f'; ctx.fillRect(0.5, -3.4, 5, 1.2); } ctx.restore(); return; } // M4 negro, cargador gris azulado
   if (!halo) { ctx.fillStyle = '#6f8794'; ctx.fillRect(0, -2.4, 8, 1.2); ctx.fillStyle = '#ffffff'; ctx.globalAlpha = 0.85; ctx.beginPath(); ctx.ellipse(4.4, 1.6, 1.2, 0.8, 0, 0, 7); ctx.fill(); ctx.globalAlpha = 1; }
   ctx.restore();
@@ -28104,7 +28154,7 @@ function flatDown(ctx, o, k) {
   if (dept === 'security' || dept === 'chaos') fill(() => roundRect(ctx, -5.6, -7, 9, 5, 1.4), L.vest);
   ell(10, -4.6, dept === 'containment' ? 5.4 : 4.4, dept === 'containment' ? 5 : 4, dept === 'containment' ? L.suit : skin);
   if (dept === 'containment' && !o.halo) { ctx.fillStyle = L.visor; roundRect(ctx, 8.4, -7.2, 6, 4, 1.6); ctx.fill(); }
-  if (dept === 'chaos') ell(10, -4.6, 4.6, 4.2, L.mask);
+  if (dept === 'chaos' || L.mask) ell(10, -4.6, 4.6, 4.2, L.mask);
   if (dept === 'security' || dept === 'chaos') fill(() => ctx.ellipse(10.6, -5.8, 4.8, 3.6, 0, Math.PI * 0.95, Math.PI * 2.05), L.helmet);
   else if (dept === 'engineering') fill(() => ctx.ellipse(10.6, -5.8, 5.2, 3.6, 0, Math.PI * 0.95, Math.PI * 2.05), L.hat);
   else if (dept !== 'containment') fill(() => ctx.ellipse(10.6, -5.6, 4.4, 3.2, 0, Math.PI * 0.95, Math.PI * 2.05), dept === 'medical' ? L.cap : hairCol);
@@ -45267,12 +45317,12 @@ class Geo {
       for (let i = 0; i < n; i++) { const p = i * 7 + o, q = p + 7; bf.v(R[p], R[p + 1], R[p + 2], c, R[i * 7 + 6]); bf.v(R[q], R[q + 1], R[q + 2], c, R[i * 7 + 13]); bf.v(X, Y, Z, c, s0); } }
   }
   /** Elipsoide (cabeza, manos, pelo, casco) centrado en ce (local), radios rx, ry, rz. */
-  orb(A, ce, rx, ry, rz, color, n = 8, m = 5) {
+  orb(A, ce, rx, ry, rz, color, n = 8, m = 5, lit = 0) { // Fase 56: lit > 0 → brillo propio (no le afecta la luz)
     const c = col(color); if (!c) return; const bf = this.tri; bf.need(n * m * 6); const k = 1 / Math.hypot(A[0], A[3], A[6]); const R = LIMB_R; const W = (n + 1) * 4;
     for (let j = 0; j <= m; j++) { const ph = -Math.PI / 2 + Math.PI * j / m, cp = Math.cos(ph), sp = Math.sin(ph);
       for (let i = 0; i <= n; i++) { const t = i / n * Math.PI * 2; const nx = cp * Math.cos(t), ny = sp, nz = cp * Math.sin(t); const x = ce[0] + rx * nx, y = ce[1] + ry * ny, z = ce[2] + rz * nz; const o = j * W + i * 4;
         R[o] = A[0] * x + A[1] * y + A[2] * z + A[9]; R[o + 1] = A[3] * x + A[4] * y + A[5] * z + A[10]; R[o + 2] = A[6] * x + A[7] * y + A[8] * z + A[11];
-        R[o + 3] = 0.74 + 0.32 * Math.max(-0.6, k * ((A[0] * nx + A[1] * ny + A[2] * nz) * LIGHT[0] + (A[3] * nx + A[4] * ny + A[5] * nz) * LIGHT[1] + (A[6] * nx + A[7] * ny + A[8] * nz) * LIGHT[2])); } }
+        R[o + 3] = lit || 0.74 + 0.32 * Math.max(-0.6, k * ((A[0] * nx + A[1] * ny + A[2] * nz) * LIGHT[0] + (A[3] * nx + A[4] * ny + A[5] * nz) * LIGHT[1] + (A[6] * nx + A[7] * ny + A[8] * nz) * LIGHT[2])); } }
     for (let j = 0; j < m; j++) for (let i = 0; i < n; i++) { const p = j * W + i * 4, q = p + 4, r = p + W, t = r + 4;
       bf.v(R[p], R[p + 1], R[p + 2], c, R[p + 3]); bf.v(R[r], R[r + 1], R[r + 2], c, R[r + 3]); bf.v(R[t], R[t + 1], R[t + 2], c, R[t + 3]); bf.v(R[p], R[p + 1], R[p + 2], c, R[p + 3]); bf.v(R[t], R[t + 1], R[t + 2], c, R[t + 3]); bf.v(R[q], R[q + 1], R[q + 2], c, R[q + 3]); }
   }
@@ -45298,14 +45348,15 @@ const AF = {
 
 // ───────── personas: figura articulada ─────────
 const LOOK3 = {
-  security: { top: '#cdd1d6', vest: '#2a2c30', legs: '#b9bdc4', cap: '#4a4e55', shoe: '#24262a' },
+  // Fase 56 (estilo EG2, imagen de referencia): oliva, chaleco negro, casco, máscara de gas con ojos rojos luminosos
+  security: { top: '#5b5830', vest: '#202125', legs: '#56532e', cap: '#2d2e32', shoe: '#1b1b1e', glove: '#1f2023', mask: '#2e2f33', filter: '#3b3c41', eye: '#ff2a1c', pads: '#1c1d20', pouch: '#2c2d32', chunky: 1.13, gun: '#1e1f22' },
   research: { top: '#eef0f2', legs: '#8d8997', shoe: '#4c4452' },
   medical: { top: '#4fb3a2', legs: '#4fb3a2', cap: '#3d988a', shoe: '#eef1f2' },
   containment: { top: '#e2b52c', legs: '#c99d1f', cap: '#e2b52c', hood: true, shoe: '#2b2b2b' },
   engineering: { top: '#3a4a5c', vest: '#d9782d', legs: '#3a4a5c', cap: '#f2d23c', brim: true, shoe: '#3b2f25' },
   administration: { top: '#3b4250', legs: '#2c313b', shoe: '#1c1f24' },
   dclass: { top: '#e0782c', legs: '#e0782c', shoe: '#2b2b2e' },
-  chaos: { top: '#3a3d2e', vest: '#24261c', legs: '#2e3024', cap: '#1c1c1c', shoe: '#141414', visor: '#d83a2e' },
+  chaos: { top: '#4b4842', vest: '#6e6140', legs: '#46433d', cap: '#3b3a33', shoe: '#1f1e1b', glove: '#24231f', mask: '#2c2b27', filter: '#4a4840', eye: '#ffa51c', pads: '#2a2925', pouch: '#7d6e4a', band: '#c0392b', chunky: 1.1, gun: '#24231f' },
 };
 const M2C = 0.612; // metros → casillas
 /** Dibuja una persona en (u, v) a la altura y (en casillas), mirando hacia ang. frame: el mismo nombre de pose que los sprites. */
@@ -45334,17 +45385,25 @@ function figure(geo, u, v, y, ang, dept, frame, skinI, hairI, flags, varI, now) 
   const hipY = 0.86 - drop, shY = 1.4 - drop + breathe;
   const B = lean ? AF.mul(AF.mul(AF.t(0, hipY, 0), AF.rx(lean)), AF.t(0, -hipY, 0)) : null; const U = B ? AF.mul(A, B) : A; // tronco inclinado
   // ── Fase 55C: cuerpo humanoide (miembros redondeados con codo y rodilla, tronco con hombros y cintura, cabeza ovalada con pelo y cara) ──
-  const bw = 1 + (((varI || 0) * 5 + hairI * 3) % 5 - 2) * 0.03; // complexión: ancho de hombros y cadera
-  const SH = 0.2 * bw, HP = 0.105 * bw; const glove = L.hood ? L.shoe : skin;
+  const ck = L.chunky || 1; // Fase 56: soldados robustos
+  const bw = (1 + (((varI || 0) * 5 + hairI * 3) % 5 - 2) * 0.03) * ck; // complexión: ancho de hombros y cadera
+  const SH = 0.2 * bw, HP = 0.105 * bw; const glove = L.glove ?? (L.hood ? L.shoe : skin);
   // piernas: muslo, rodilla, pantorrilla y pie
   for (const [sd, a] of [[-1, legA], [1, legB]]) {
     const hip = [sd * HP, hipY, 0]; let kn, an;
     if (thigh) { kn = [hip[0], hipY - 0.43 * Math.cos(thigh), 0.43 * Math.sin(thigh)]; an = [hip[0], 0.07, kn[2] - (sit ? 0 : 0.05)]; }
     else { const kb = walk ? 0.1 + 0.75 * Math.max(0, -a) + 0.12 * Math.max(0, a) : 0.04; kn = [hip[0], hipY - 0.43 * Math.cos(a), 0.43 * Math.sin(a)]; const b = a - kb; an = [hip[0], Math.max(0.07, kn[1] - 0.4 * Math.cos(b)), kn[2] + 0.4 * Math.sin(b)]; }
-    geo.limb(A, hip, kn, 0.088 * bw, 0.066, L.legs, 1, 7, true, true);
-    geo.limb(A, kn, an, 0.064, 0.047, L.legs, 1, 7, false, false);
+    geo.limb(A, hip, kn, 0.088 * bw, 0.066 * ck, L.legs, 1, 7, true, true);
+    geo.limb(A, kn, an, 0.064 * ck, 0.047 * ck, L.legs, 1, 7, false, false);
     const up = an[1] > 0.1 ? Math.min(0.08, (an[1] - 0.07) * 0.5) : 0; // pie levantado al andar: la punta cae
-    geo.limb(A, [an[0], an[1] - 0.02, an[2] - 0.05], [an[0] + sd * 0.012, an[1] - 0.035 - up, an[2] + 0.16], 0.052, 0.044, L.shoe, 0.8, 6, true, true);
+    if (L.mask) { // Fase 56: bota alta, rodillera y bolsillo de muslo
+      const kd = [an[0] - kn[0], an[1] - kn[1], an[2] - kn[2]];
+      geo.limb(A, an, [an[0] + kd[0] * -0.42, an[1] + kd[1] * -0.42, an[2] + kd[2] * -0.42], 0.062, 0.066, L.shoe, 1, 7, false, true);
+      const nk = [kn[0], kn[1] + 0.01, kn[2] + 0.05]; geo.orb(A, nk, 0.07, 0.072, 0.048, L.pads, 7, 4);
+      const th = [(hip[0] + kn[0]) / 2 + sd * 0.07, (hip[1] + kn[1]) / 2, (hip[2] + kn[2]) / 2]; geo.orb(A, th, 0.045, 0.07, 0.06, L.pouch, 6, 4);
+    }
+    const fz = L.mask ? 1.22 : 1;
+    geo.limb(A, [an[0], an[1] - 0.02, an[2] - 0.05], [an[0] + sd * 0.012, an[1] - 0.035 - up, an[2] + 0.16 * fz], 0.052 * fz, 0.044 * fz, L.shoe, 0.8, 6, true, true);
   }
   // tronco: cadera, cintura, pecho y hombros
   const wY = hipY + 0.17, cY = shY - 0.06;
@@ -45352,6 +45411,14 @@ function figure(geo, u, v, y, ang, dept, frame, skinI, hairI, flags, varI, now) 
   geo.limb(U, [0, wY - 0.03, 0], [0, cY, 0.005], 0.152 * bw, SH + 0.012, L.top, 0.62, 9, false, false);
   geo.limb(U, [0, cY, 0.005], [0, shY + 0.055, 0], SH + 0.012, 0.075, L.top, 0.62, 9, false, false);
   if (L.vest) { geo.limb(U, [0, wY + 0.02, 0], [0, cY - 0.01, 0.005], 0.165 * bw, SH + 0.03, L.vest, 0.68, 9, false, false); geo.limb(U, [0, cY - 0.01, 0.005], [0, shY + 0.03, 0], SH + 0.03, 0.1, L.vest, 0.68, 9, false, false); }
+  if (L.mask) { // Fase 56: bolsillos del portaplacas, cinturón con hebilla y hombreras
+    const fz = (0.165 * bw) * 0.68;
+    for (const x of [-0.105, 0, 0.105]) geo.obox(U, x * bw - 0.045, wY + 0.03, fz - 0.025, x * bw + 0.045, wY + 0.15, fz + 0.035, L.pouch);
+    geo.obox(U, -0.12 * bw, cY - 0.05, fz - 0.005, 0.12 * bw, cY - 0.015, fz + 0.03, L.pouch);
+    geo.limb(U, [0, hipY - 0.01, 0], [0, hipY + 0.05, 0], 0.172 * bw, 0.168 * bw, '#141417', 0.7, 9, false, false);
+    geo.obox(U, -0.03, hipY - 0.005, 0.172 * bw * 0.7 - 0.01, 0.03, hipY + 0.045, 0.172 * bw * 0.7 + 0.012, '#5b5b60');
+    for (const sd of [-1, 1]) geo.orb(U, [sd * (SH + 0.02), shY + 0.01, 0], 0.075, 0.05, 0.08, L.vest, 7, 4);
+  }
   if (dept === 'research') geo.limb(U, [0, wY, 0], [0, hipY - 0.3, 0], 0.158 * bw, 0.19 * bw, L.top, 0.72, 9, false, false); // bata
   // brazos: hombro, codo, antebrazo y mano
   for (const [sd, a] of [[-1, armA], [1, armB]]) {
@@ -45359,14 +45426,28 @@ function figure(geo, u, v, y, ang, dept, frame, skinI, hairI, flags, varI, now) 
     let up = a, eb; // ángulo del brazo y flexión del codo
     if (gun) eb = 0.06; else if (walk) eb = f0 === 'x' ? 0.1 : 0.3 + 0.35 * Math.max(0, a); else if (a > 0.3 && a < 1.6) { up = a * 0.5; eb = a * 0.5 + 0.55; } else eb = a > 1.6 ? 0.1 : 0.14;
     const el = [sh[0] + sd * 0.025, sh[1] - 0.27 * Math.cos(up), 0.27 * Math.sin(up)]; const fa = up + eb; const wr = [el[0] - sd * (gun ? 0.09 : 0.01), el[1] - 0.25 * Math.cos(fa), el[2] + 0.25 * Math.sin(fa)];
-    geo.limb(U, sh, el, 0.062, 0.05, L.top, 1, 7, true, true);
-    geo.limb(U, el, wr, 0.048, 0.038, dept === 'medical' || dept === 'dclass' ? skin : L.top, 1, 7, false, false);
-    geo.orb(U, [wr[0], wr[1] - 0.035 * Math.cos(fa), wr[2] + 0.035 * Math.sin(fa)], 0.04, 0.052, 0.045, glove, 6, 4);
+    geo.limb(U, sh, el, 0.062 * ck * ck, 0.05 * ck * ck, L.top, 1, 7, true, true);
+    if (L.band && sd < 0) geo.limb(U, [sh[0] + (el[0] - sh[0]) * 0.35, sh[1] + (el[1] - sh[1]) * 0.35, sh[2] + (el[2] - sh[2]) * 0.35], [sh[0] + (el[0] - sh[0]) * 0.6, sh[1] + (el[1] - sh[1]) * 0.6, sh[2] + (el[2] - sh[2]) * 0.6], 0.06 * ck, 0.056 * ck, L.band, 1, 7, false, false);
+    geo.limb(U, el, wr, 0.048 * ck * ck, 0.04 * ck * ck, dept === 'medical' || dept === 'dclass' ? skin : L.top, 1, 7, false, false);
+    const gk = L.mask ? 1.2 : 1;
+    geo.orb(U, [wr[0], wr[1] - 0.035 * Math.cos(fa), wr[2] + 0.035 * Math.sin(fa)], 0.04 * gk, 0.052 * gk, 0.045 * gk, glove, 6, 4);
   }
   // cuello y cabeza
   const hy = shY + 0.07, hc = hy + 0.145;
-  geo.limb(U, [0, shY + 0.03, 0], [0, hy + 0.06, 0.005], 0.055, 0.05, L.hood ? L.cap : skin, 1, 6, false, false);
+  geo.limb(U, [0, shY + 0.03, 0], [0, hy + 0.06, 0.005], 0.055, 0.05, L.hood ? L.cap : L.mask ?? skin, 1, 6, false, false);
   if (L.hood) { geo.orb(U, [0, hc, 0], 0.125, 0.15, 0.13, L.cap, 9, 6); geo.obox(U, -0.085, hc - 0.045, 0.105, 0.085, hc + 0.05, 0.134, '#22262b'); }
+  else if (L.mask) { // Fase 56: máscara de gas, ojos luminosos, filtro y casco con borde (imagen de referencia)
+    geo.orb(U, [0, hc - 0.005, 0.005], 0.108, 0.135, 0.118, L.mask, 9, 6);
+    for (const ex of [-0.045, 0.045]) {
+      geo.orb(U, [ex, hc + 0.012, 0.098], 0.047, 0.047, 0.024, '#111113', 8, 4);
+      geo.orb(U, [ex, hc + 0.012, 0.11], 0.039, 0.039, 0.02, L.eye, 8, 4, 1.4);
+      geo.orb(U, [ex - 0.012, hc + 0.024, 0.126], 0.011, 0.011, 0.005, '#fff2ea', 4, 3, 1.3);
+    }
+    geo.limb(U, [0.012, hc - 0.05, 0.1], [0.022, hc - 0.095, 0.17], 0.045, 0.042, L.filter, 1, 8, false, true);
+    geo.orb(U, [0.022, hc - 0.095, 0.172], 0.03, 0.03, 0.012, '#18181a', 6, 3);
+    geo.limb(U, [0, hc + 0.035, -0.005], [0, hc + 0.13, -0.01], 0.13, 0.112, L.cap, 1.1, 10, false, true);
+    geo.limb(U, [0, hc + 0.025, -0.005], [0, hc + 0.045, -0.005], 0.142, 0.14, L.cap, 1.08, 10, true, false);
+  }
   else {
     const face = L.visor ? L.cap : skin; // pasamontañas
     geo.orb(U, [0, hc, 0], 0.104, 0.135, 0.114, face, 9, 6);
@@ -45387,7 +45468,16 @@ function figure(geo, u, v, y, ang, dept, frame, skinI, hairI, flags, varI, now) 
       if (style === 2) geo.orb(U, [0, hc + 0.1, -0.1], 0.05, 0.05, 0.05, hair, 6, 4);
     }
   }
-  if (gun) { const T = AF.mul(U, AF.mul(AF.t(0.1, shY - 0.03, 0), AF.rx(-armA))); geo.obox(T, -0.028, -0.7, -0.03, 0.028, -0.4, 0.09, '#1d1f22'); geo.obox(T, -0.018, -0.98, 0.0, 0.018, -0.68, 0.045, '#1d1f22'); geo.obox(T, -0.022, -0.52, 0.08, 0.022, -0.46, 0.2, '#2a2c30'); if (flash) geo.orb(T, [0, -1.06, 0.022], 0.07, 0.11, 0.07, '#ffd66b', 6, 4); }
+  if (gun) { // Fase 56: carabina con cajón, guardamanos, cañón, cargador, culata y asa
+    const T = AF.mul(U, AF.mul(AF.t(0.1, shY - 0.03, 0), AF.rx(-armA))); const gc = L.gun ?? '#1d1f22', gl = shade(gc, 0.18);
+    geo.obox(T, -0.03, -0.66, -0.03, 0.03, -0.42, 0.08, gc);
+    geo.obox(T, -0.034, -0.86, -0.025, 0.034, -0.66, 0.07, gl);
+    geo.limb(T, [0, -0.86, 0.025], [0, -1.02, 0.025], 0.017, 0.015, gc, 1, 6, false, true);
+    geo.obox(T, -0.02, -0.6, -0.17, 0.02, -0.52, -0.03, gl);
+    geo.obox(T, -0.026, -0.42, -0.05, 0.026, -0.2, 0.06, gc);
+    geo.obox(T, -0.014, -0.62, 0.08, 0.014, -0.46, 0.11, gl);
+    if (flash) geo.orb(T, [0, -1.08, 0.025], 0.07, 0.11, 0.07, '#ffd66b', 6, 4, 1.4);
+  }
 }
 const headingOf = (back, flip) => (!back && !flip ? Math.PI / 2 : back && flip ? -Math.PI / 2 : !back && flip ? 0 : Math.PI);
 
