@@ -27620,13 +27620,10 @@ const FLAT_LOOKS = {
   dclass: {
     suit: '#e0782c', suitD: '#c2611d', legs: '#e0782c', legsD: '#c2611d', shoe: '#2b2b2e', hand: null,
   },
-  // Fase 56 (estilo EG2): Seguridad como la imagen de referencia: uniforme oliva, chaleco portaplacas negro,
-  // casco negro y máscara de gas con ojos rojos luminosos; figura robusta.
-  security: {
-    suit: '#6e6939', suitD: '#58542d', legs: '#686436', legsD: '#524f2b',
-    shoe: '#1d1d20', boot: true, hand: '#1f2023', helmet: '#2d2e32', helmetD: '#1f2023', visor: '#ff2d20',
-    vest: '#202125', vestD: '#17181b', pouch: '#2c2d32', knee: '#1c1d20', hair: false, chunky: true,
-    mask: '#2e2f33', maskD: '#1d1e21', lens: '#ff2a1c', lensL: '#ffc2b5', filter: '#3b3c41', glow: '255,45,30', mag: '#26272b', gun: '#1e1f22',
+  security: { // Fase 56: mono gris claro, chaleco negro, casco con visor amarillo; figura robusta (estilo EG2)
+    suit: '#cdd1d6', suitD: '#adb2b9', legs: '#b9bdc4', legsD: '#9da2aa',
+    shoe: '#24262a', boot: true, hand: '#2b2d31', helmet: '#4a4e55', helmetD: '#3a3d43', visor: '#f2c230',
+    vest: '#2a2c30', vestD: '#202226', pouch: '#3c3f45', knee: '#2f3136', hair: false, chunky: true,
   },
   research: {
     coat: '#eef0f2', coatD: '#d6dade', lapel: '#ffffff', shirt: '#8ea7da', legs: '#8d8997', legsD: '#76727f',
@@ -27648,11 +27645,12 @@ const FLAT_LOOKS = {
   // Fase 48: Insurgencia del Caos (según la imagen de referencia): uniforme oliva, casco oscuro,
   // máscara de gas con lentes rojas redondas y filtro, chaleco negro con bolsillos, rodilleras y botas.
   chaos: {
-    // Fase 56: se distingue de Seguridad (que ahora lleva oliva y ojos rojos): gris carbón, chaleco caqui, lentes ámbar y brazalete rojo
-    suit: '#4b4842', suitD: '#3b3934', legs: '#46433d', legsD: '#383631',
-    shoe: '#1f1e1b', boot: true, hand: '#24231f', helmet: '#3b3a33', helmetD: '#2a2924', visor: '#ffab1f',
-    vest: '#6e6140', vestD: '#584d33', pouch: '#7d6e4a', knee: '#2a2925', hair: false, chunky: true,
-    mask: '#2c2b27', maskD: '#1e1d1a', lens: '#ffa51c', lensL: '#fff1b8', filter: '#4a4840', glow: '255,170,30', mag: '#5a5240', gun: '#24231f', band: '#c0392b',
+    // Fase 56 (estilo EG2, imagen de referencia): uniforme oliva, chaleco portaplacas negro, casco negro y
+    // máscara de gas con filtro y ojos rojos luminosos; figura robusta.
+    suit: '#6e6939', suitD: '#58542d', legs: '#686436', legsD: '#524f2b',
+    shoe: '#1d1d20', boot: true, hand: '#1f2023', helmet: '#2d2e32', helmetD: '#1f2023', visor: '#ff2d20',
+    vest: '#202125', vestD: '#17181b', pouch: '#2c2d32', knee: '#1c1d20', hair: false, chunky: true,
+    mask: '#2e2f33', maskD: '#1d1e21', lens: '#ff2a1c', lensL: '#ffc2b5', filter: '#3b3c41', glow: '255,45,30', mag: '#26272b', gun: '#1e1f22',
   },
   containment: {
     suit: '#e8c64c', suitD: '#c9a733', legs: '#e8c64c', legsD: '#c9a733', shoe: '#222428', boot: true,
@@ -27996,7 +27994,7 @@ function flatHead(ctx, o, k) {
   if (!halo && !back) {
     ctx.fillStyle = 'rgba(120,60,40,0.12)'; ctx.beginPath(); ctx.ellipse(cx + 2.6, cy + 0.6, 2.6, 5.2, 0, -Math.PI / 2, Math.PI / 2); ctx.fill();
   }
-  if (!back && !halo && dept !== 'chaos' && dept !== 'security') flatFace(ctx, o, cx + 1.1, cy, lod);
+  if (!back && !halo && dept !== 'chaos' && !L.mask) flatFace(ctx, o, cx + 1.1, cy, lod);
   if (showHair && !halo) flatHairFront(ctx, T.hair, cx, cy, hairCol, back);
   if (dept === 'medical') {
     fill(() => { ctx.ellipse(cx + 0.2, cy - 2.6, 5.7, 4.6, 0, Math.PI, Math.PI * 2); ctx.lineTo(cx + 5.9, cy - 1.6); ctx.lineTo(cx - 5.5, cy - 1.6); ctx.closePath(); }, L.cap);
@@ -45349,14 +45347,15 @@ const AF = {
 // ───────── personas: figura articulada ─────────
 const LOOK3 = {
   // Fase 56 (estilo EG2, imagen de referencia): oliva, chaleco negro, casco, máscara de gas con ojos rojos luminosos
-  security: { top: '#5b5830', vest: '#202125', legs: '#56532e', cap: '#2d2e32', shoe: '#1b1b1e', glove: '#1f2023', mask: '#2e2f33', filter: '#3b3c41', eye: '#ff2a1c', pads: '#1c1d20', pouch: '#2c2d32', chunky: 1.13, gun: '#1e1f22' },
+  security: { top: '#cdd1d6', vest: '#2a2c30', legs: '#b9bdc4', cap: '#4a4e55', shoe: '#24262a', glove: '#2b2d31', chunky: 1.07 },
   research: { top: '#eef0f2', legs: '#8d8997', shoe: '#4c4452' },
   medical: { top: '#4fb3a2', legs: '#4fb3a2', cap: '#3d988a', shoe: '#eef1f2' },
   containment: { top: '#e2b52c', legs: '#c99d1f', cap: '#e2b52c', hood: true, shoe: '#2b2b2b' },
   engineering: { top: '#3a4a5c', vest: '#d9782d', legs: '#3a4a5c', cap: '#f2d23c', brim: true, shoe: '#3b2f25' },
   administration: { top: '#3b4250', legs: '#2c313b', shoe: '#1c1f24' },
   dclass: { top: '#e0782c', legs: '#e0782c', shoe: '#2b2b2e' },
-  chaos: { top: '#4b4842', vest: '#6e6140', legs: '#46433d', cap: '#3b3a33', shoe: '#1f1e1b', glove: '#24231f', mask: '#2c2b27', filter: '#4a4840', eye: '#ffa51c', pads: '#2a2925', pouch: '#7d6e4a', band: '#c0392b', chunky: 1.1, gun: '#24231f' },
+  // Fase 56 (estilo EG2, imagen de referencia): oliva, chaleco negro, casco, máscara de gas con ojos rojos luminosos
+  chaos: { top: '#5b5830', vest: '#202125', legs: '#56532e', cap: '#2d2e32', shoe: '#1b1b1e', glove: '#1f2023', mask: '#2e2f33', filter: '#3b3c41', eye: '#ff2a1c', pads: '#1c1d20', pouch: '#2c2d32', chunky: 1.13, gun: '#1e1f22' },
 };
 const M2C = 0.612; // metros → casillas
 /** Dibuja una persona en (u, v) a la altura y (en casillas), mirando hacia ang. frame: el mismo nombre de pose que los sprites. */
