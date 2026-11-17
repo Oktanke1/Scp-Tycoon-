@@ -6,9 +6,9 @@ const scene = new THREE.Scene(); scene.background = new THREE.Color('#2a2e33');
 const pm = new THREE.PMREMGenerator(renderer); // entorno suave para reflejos (sala neutra)
 const env = new THREE.Scene(); env.add(new THREE.HemisphereLight(0xffffff, 0x60656c, 3)); const panel = new THREE.Mesh(new THREE.PlaneGeometry(4, 1), new THREE.MeshBasicMaterial({ color: 0xffffff })); panel.position.set(0, 3, 1); panel.lookAt(0, 0, 0); env.add(panel);
 scene.environment = pm.fromScene(env, 0.04).texture;
-scene.add(new THREE.HemisphereLight(0xf2f4ff, 0x5a5550, 0.9));
-const sun = new THREE.DirectionalLight(0xfff4e6, 2.4); sun.position.set(2.2, 4.5, 3.2); sun.castShadow = true; sun.shadow.mapSize.set(2048, 2048); sun.shadow.radius = 4; sun.shadow.bias = -0.0004; sun.shadow.normalBias = 0.02; Object.assign(sun.shadow.camera, { left: -2, right: 2, top: 2.5, bottom: -1, near: 0.5, far: 12 }); scene.add(sun);
-const rim = new THREE.DirectionalLight(0xbfd8ff, 0.9); rim.position.set(-3, 2.5, -3); scene.add(rim);
+scene.add(new THREE.HemisphereLight(0xeef2ff, 0x4a4540, 0.45));
+const sun = new THREE.DirectionalLight(0xffefd8, 3.3); sun.position.set(2.2, 4.5, 3.2); sun.castShadow = true; sun.shadow.mapSize.set(2048, 2048); sun.shadow.radius = 4; sun.shadow.bias = -0.0004; sun.shadow.normalBias = 0.02; Object.assign(sun.shadow.camera, { left: -2, right: 2, top: 2.5, bottom: -1, near: 0.5, far: 12 }); scene.add(sun);
+const rim = new THREE.DirectionalLight(0xbfd8ff, 1.8); rim.position.set(-3, 2.5, -3); scene.add(rim); const fill = new THREE.DirectionalLight(0xdfe8ff, 0.55); fill.position.set(-2.5, 1.5, 3); scene.add(fill);
 // suelo de baldosas y pared con zócalo, como la sala del juego
 const tileC = document.createElement('canvas'); tileC.width = tileC.height = 256; { const x = tileC.getContext('2d'); x.fillStyle = '#c2c4c6'; x.fillRect(0, 0, 256, 256); x.strokeStyle = '#a6a9ac'; x.lineWidth = 4; for (let i = 0; i <= 256; i += 128) { x.beginPath(); x.moveTo(i, 0); x.lineTo(i, 256); x.stroke(); x.beginPath(); x.moveTo(0, i); x.lineTo(256, i); x.stroke(); } }
 const tt = new THREE.CanvasTexture(tileC); tt.wrapS = tt.wrapT = THREE.RepeatWrapping; tt.repeat.set(4, 4); tt.colorSpace = THREE.SRGBColorSpace;
