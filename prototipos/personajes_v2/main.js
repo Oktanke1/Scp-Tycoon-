@@ -1,8 +1,8 @@
 // ───────── Construcción con Three.js ─────────
 const MATS = { // materiales físicos: rugosidad / metalicidad / brillo
-  skin: { roughness: 0.6, metalness: 0, sheen: 0.35, sheenColor: '#ff9f86', tex: 'skin', ns: 0.07 }, cloth: { roughness: 0.92, metalness: 0, sheen: 0.12, sheenColor: '#8f959c', tex: 'cloth', ns: 0.28 },
+  skin: { roughness: 0.6, metalness: 0, sheen: 0.35, sheenColor: '#ff9f86', tex: 'skin', ns: 0.025 }, cloth: { roughness: 0.92, metalness: 0, sheen: 0.12, sheenColor: '#8f959c', tex: 'cloth', ns: 0.28 },
   leather: { roughness: 0.42, metalness: 0.02, clearcoat: 0.25, tex: 'leather', ns: 0.5 }, plastic: { roughness: 0.34, metalness: 0.02, clearcoat: 0.4, tex: 'grain', ns: 0.06 },
-  rubber: { roughness: 0.8, metalness: 0, tex: 'grain', ns: 0.4 }, hair: { roughness: 0.5, metalness: 0, sheen: 0.6, sheenColor: '#d8c0a0', tex: 'hair', ns: 0.8 }, metal: { roughness: 0.3, metalness: 0.85 },
+  rubber: { roughness: 0.8, metalness: 0, tex: 'grain', ns: 0.4 }, hair: { roughness: 0.5, metalness: 0, sheen: 0.6, sheenColor: '#d8c0a0', tex: 'hair', ns: 0.3 }, metal: { roughness: 0.3, metalness: 0.85 },
 };
 // mapas de relieve procedurales (tejido, cuero, piel, pelo, grano) → normales; las mallas llevan UV por proyección en caja
 const TEXC = {};
@@ -51,7 +51,7 @@ function meshFromSDF(part, rule, skel, all) {
 }
 function irisTexture(col) {
   const c = document.createElement('canvas'); c.width = c.height = 128; const x = c.getContext('2d');
-  const g = x.createRadialGradient(64, 64, 6, 64, 64, 62); g.addColorStop(0, '#0b0807'); g.addColorStop(0.38, '#0b0807'); g.addColorStop(0.41, new THREE.Color(col).offsetHSL(0, 0, 0.12).getStyle()); g.addColorStop(0.8, col); g.addColorStop(0.95, new THREE.Color(col).offsetHSL(0, 0, -0.2).getStyle()); g.addColorStop(1, '#1a1210');
+  const g = x.createRadialGradient(64, 64, 6, 64, 64, 62); g.addColorStop(0, '#0b0807'); g.addColorStop(0.3, '#0b0807'); g.addColorStop(0.33, new THREE.Color(col).offsetHSL(0, 0, 0.12).getStyle()); g.addColorStop(0.62, new THREE.Color(col).offsetHSL(0, 0.15, 0.06).getStyle()); g.addColorStop(0.86, col); g.addColorStop(0.95, new THREE.Color(col).offsetHSL(0, 0, -0.2).getStyle()); g.addColorStop(1, '#1a1210');
   x.fillStyle = g; x.beginPath(); x.arc(64, 64, 62, 0, 7); x.fill();
   x.strokeStyle = 'rgba(255,255,255,0.12)'; x.lineWidth = 1.2; for (let i = 0; i < 40; i++) { const a = (i / 40) * 6.283; x.beginPath(); x.moveTo(64 + Math.cos(a) * 22, 64 + Math.sin(a) * 22); x.lineTo(64 + Math.cos(a) * 50, 64 + Math.sin(a) * 50); x.stroke(); }
   const t = new THREE.CanvasTexture(c); t.colorSpace = THREE.SRGBColorSpace; t.anisotropy = 4; return t;
@@ -63,20 +63,28 @@ function faceRig(def, head) {
   const white = material('plastic', '#f5f1ea', { roughness: 0.3, clearcoat: 1, clearcoatRoughness: 0.1 }); const skin = material('skin', def.skin);
   const irisMat = new THREE.MeshPhysicalMaterial({ map: irisTexture(def.iris), roughness: 0.25, clearcoat: 1, clearcoatRoughness: 0.05 });
   for (const s of [-1, 1]) {
-    const eye = new THREE.Group(); eye.position.copy(rel(s * 0.036, H[1] + 0.02, H[2] + 0.079)); head.add(eye);
+    const eye = new THREE.Group(); eye.position.copy(rel(s * 0.035, H[1] + 0.02, H[2] + 0.072)); head.add(eye);
     const ball = new THREE.Mesh(new THREE.SphereGeometry(0.0185, 32, 20), white); eye.add(ball);
-    const iris = new THREE.Mesh(new THREE.CircleGeometry(0.0085, 32), irisMat); iris.position.z = 0.0176; eye.add(iris);
+    const iris = new THREE.Mesh(new THREE.CircleGeometry(0.0108, 40), irisMat); iris.position.z = 0.0168; eye.add(iris);
     const cornea = new THREE.Mesh(new THREE.SphereGeometry(0.011, 24, 12, 0, Math.PI * 2, 0, 0.9), new THREE.MeshPhysicalMaterial({ color: 0xffffff, transparent: true, opacity: 0.18, roughness: 0, clearcoat: 1 })); cornea.rotation.x = Math.PI / 2; cornea.position.z = 0.0105; eye.add(cornea);
-    const lid = new THREE.Mesh(new THREE.SphereGeometry(0.0205, 32, 16, 0, Math.PI * 2, 0, Math.PI * 0.5), skin); lid.rotation.x = -0.12; eye.add(lid); rig.lids.push(lid);
+    const lid = new THREE.Mesh(new THREE.SphereGeometry(0.0205, 32, 16, 0, Math.PI * 2, 0, Math.PI * 0.5), skin); lid.rotation.x = -0.4; eye.add(lid); rig.lids.push(lid);
     const lower = new THREE.Mesh(new THREE.SphereGeometry(0.0196, 32, 12, 0, Math.PI * 2, Math.PI * 0.72, Math.PI * 0.28), skin); eye.add(lower);
-    const curve = new THREE.CatmullRomCurve3([rel(s * 0.016, H[1] + 0.047, H[2] + 0.097), rel(s * 0.038, H[1] + 0.054, H[2] + 0.096), rel(s * 0.058, H[1] + 0.047, H[2] + 0.084)]);
+    const curve = new THREE.CatmullRomCurve3([rel(s * 0.016, H[1] + 0.045, H[2] + 0.088), rel(s * 0.036, H[1] + 0.051, H[2] + 0.088), rel(s * 0.056, H[1] + 0.045, H[2] + 0.076)]);
     const brow = new THREE.Mesh(new THREE.TubeGeometry(curve, 12, 0.0042, 8), material('hair', def.hairCol)); head.add(brow); rig.brows.push({ m: brow, s });
+  }
+  { // boca: línea oscura y labios que siguen la superficie de la cara (se leen bien y permiten expresiones)
+    const skinF = def.parts.find((q) => q.id === 'skin').f; const surfZ = (x, y) => { let z = H[2] + 0.16; for (let i = 0; i < 80 && skinF([x, y, z]) > 0.0005; i++) z -= Math.max(0.0008, skinF([x, y, z])); return z; };
+    const sm = def.smile ?? 0; const curve = (dy, off, wd) => new THREE.CatmullRomCurve3([-1, -0.5, 0, 0.5, 1].map((u) => { const x = u * wd, y = H[1] - 0.057 + dy + sm * u * u; return rel(x, y, surfZ(x, y) + off); }));
+    const lipM = material('skin', def.lip ?? '#b06a60', { roughness: 0.45 });
+    head.add(new THREE.Mesh(new THREE.TubeGeometry(curve(0, 0.0012, 0.02), 24, 0.0013, 6), new THREE.MeshStandardMaterial({ color: '#4a2224', roughness: 0.7 })));
+    head.add(new THREE.Mesh(new THREE.TubeGeometry(curve(0.0028, -0.0008, 0.018), 24, 0.0026, 8), lipM));
+    head.add(new THREE.Mesh(new THREE.TubeGeometry(curve(-0.0038, -0.0008, 0.015), 24, 0.0033, 8), lipM));
   }
   if (def.extras === 'scientist') { // gafas de pasta
     const fr = material('plastic', '#2b2f36', { roughness: 0.3 });
-    for (const s of [-1, 1]) { const r = new THREE.Mesh(new THREE.TorusGeometry(0.022, 0.0025, 8, 32), fr); r.scale.y = 0.78; r.position.copy(rel(s * 0.037, H[1] + 0.022, H[2] + 0.108)); head.add(r);
+    for (const s of [-1, 1]) { const r = new THREE.Mesh(new THREE.TorusGeometry(0.022, 0.0025, 8, 32), fr); r.scale.y = 0.78; r.position.copy(rel(s * 0.036, H[1] + 0.02, H[2] + 0.1)); head.add(r);
       const arm = new THREE.Mesh(new THREE.CylinderGeometry(0.002, 0.002, 0.1, 6), fr); arm.rotation.x = Math.PI / 2; arm.position.copy(rel(s * 0.06, H[1] + 0.024, H[2] + 0.06)); head.add(arm); }
-    const br = new THREE.Mesh(new THREE.CylinderGeometry(0.0022, 0.0022, 0.03, 6), fr); br.rotation.z = Math.PI / 2; br.position.copy(rel(0, H[1] + 0.03, H[2] + 0.11)); head.add(br);
+    const br = new THREE.Mesh(new THREE.CylinderGeometry(0.0022, 0.0022, 0.03, 6), fr); br.rotation.z = Math.PI / 2; br.position.copy(rel(0, H[1] + 0.028, H[2] + 0.101)); head.add(br);
   }
   if (def.extras === 'guard') { // visor amarillo curvo
     const vis = new THREE.Mesh(new THREE.SphereGeometry(0.136, 40, 12, Math.PI / 2 - 0.9, 1.8, 1.24, 0.34), new THREE.MeshPhysicalMaterial({ color: 0xf2c230, transparent: true, opacity: 0.82, roughness: 0.08, metalness: 0.2, clearcoat: 1, side: THREE.DoubleSide }));
@@ -166,15 +174,14 @@ function animate(ch, t, mode, ph = 0) {
     const tab = ch.sk.tablet; const chestP = local(ch, b.chest, new THREE.Vector3(0, 0, 0));
     if (mode === 'fear') { reach(ch, 1, chestP.clone().add(new THREE.Vector3(0.12, 0.28, 0.22)), new THREE.Vector3(1, -0.5, 0)); reach(ch, -1, chestP.clone().add(new THREE.Vector3(-0.12, 0.28, 0.22)), new THREE.Vector3(-1, -0.5, 0)); }
     else {
-      const T = chestP.clone().add(new THREE.Vector3(0.1, -0.26 + (mode === 'walk' ? Math.sin(t * 6.6 + ph) * 0.01 : 0), 0.34)); reach(ch, 1, T, new THREE.Vector3(1, -1, -0.3));
-      tab.position.copy(T).add(new THREE.Vector3(-0.05, 0.02, 0.03)); tab.rotation.set(-0.9, 0.2, 0.05);
-      const cyc = (t + ph) % 7; // cada 7 s: se sube las gafas; si no, toca la pantalla
-      if (mode !== 'walk' && cyc > 5) { const head = local(ch, b.head, new THREE.Vector3(0.0, 0.05, 0.12)); reach(ch, -1, head.add(new THREE.Vector3(-0.015, -0.035, 0.03)), new THREE.Vector3(-1, -1, 0)); }
-      else if (mode !== 'walk') reach(ch, -1, tab.position.clone().add(new THREE.Vector3(-0.02 + Math.sin(t * 3) * 0.02, 0.06, 0.03)), new THREE.Vector3(-1, -1, -0.2));
+      const T = chestP.clone().add(new THREE.Vector3(0.11, -0.3 + (mode === 'walk' ? Math.sin(t * 6.6 + ph) * 0.01 : 0), 0.3)); reach(ch, 1, T, new THREE.Vector3(1, -1, -0.4)); // la tableta en el brazo de su lado
+      tab.position.copy(T).add(new THREE.Vector3(-0.03, 0.025, 0.02)); tab.rotation.set(-1.05, 0.35, 0.05);
+      const cyc = (t + ph) % 7; // cada 7 s se sube las gafas; el resto del tiempo la otra mano descansa
+      if (mode !== 'walk' && cyc > 5) { const head = local(ch, b.head, new THREE.Vector3(0.0, 0.05, 0.12)); reach(ch, -1, head.add(new THREE.Vector3(-0.012, -0.035, 0.035)), new THREE.Vector3(-1, -1, 0)); }
     }
   }
   // parpadeo y expresión
-  const blink = (t * 1000 + ph * 500) % 4200 < 130; const lidRx = blink ? 1.3 : mode === 'fear' ? -0.45 : -0.12;
+  const blink = (t * 1000 + ph * 500) % 4200 < 130; const lidRx = blink ? 1.3 : mode === 'fear' ? -0.6 : -0.4;
   for (const l of ch.rig.lids) l.rotation.x = lidRx;
   for (const { m, s: sd } of ch.rig.brows) { m.rotation.z = mode === 'fear' ? -sd * 0.12 : 0; m.position.y = mode === 'fear' ? 0.006 : 0; }
 }

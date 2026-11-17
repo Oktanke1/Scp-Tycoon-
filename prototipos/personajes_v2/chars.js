@@ -34,12 +34,12 @@ function lipsSDF(o) { // labios con arco de Cupido, labio inferior más lleno y 
   const H = H0, sm = o.smile ?? 0;
   return (p) => {
     const x = p[0]; const bow = 0.003 * Math.exp(-Math.pow(x / 0.008, 2));
-    let up = cap(p, [-0.024, H[1] - 0.052 + sm, H[2] + 0.096], [0, H[1] - 0.049 + bow, H[2] + 0.104], 0.0055, 0.0075);
-    up = Math.min(up, cap(p, [0, H[1] - 0.049 + bow, H[2] + 0.104], [0.024, H[1] - 0.052 + sm, H[2] + 0.096], 0.0075, 0.0055));
-    let lo = cap(p, [-0.017, H[1] - 0.064 + sm * 0.4, H[2] + 0.096], [0, H[1] - 0.066, H[2] + 0.104], 0.006, 0.0088);
-    lo = Math.min(lo, cap(p, [0, H[1] - 0.066, H[2] + 0.104], [0.017, H[1] - 0.064 + sm * 0.4, H[2] + 0.096], 0.0088, 0.006));
+    let up = cap(p, [-0.02, H[1] - 0.051 + sm, H[2] + 0.086], [0, H[1] - 0.049 + bow, H[2] + 0.091], 0.0042, 0.0056);
+    up = Math.min(up, cap(p, [0, H[1] - 0.049 + bow, H[2] + 0.091], [0.02, H[1] - 0.051 + sm, H[2] + 0.086], 0.0056, 0.0042));
+    let lo = cap(p, [-0.015, H[1] - 0.061 + sm * 0.4, H[2] + 0.085], [0, H[1] - 0.063, H[2] + 0.0905], 0.0046, 0.0066);
+    lo = Math.min(lo, cap(p, [0, H[1] - 0.063, H[2] + 0.0905], [0.015, H[1] - 0.061 + sm * 0.4, H[2] + 0.085], 0.0066, 0.0046));
     let d = smin(up, lo, 0.006);
-    d = smax(d, -cap(p, [-0.028, H[1] - 0.0585 + sm * 0.7, H[2] + 0.108], [0.028, H[1] - 0.0585 + sm * 0.7, H[2] + 0.108], 0.0022, 0.0022), 0.002);
+    d = smax(d, -cap(p, [-0.026, H[1] - 0.0565 + sm * 0.7, H[2] + 0.099], [0.026, H[1] - 0.0565 + sm * 0.7, H[2] + 0.099], 0.0024, 0.0024), 0.0015);
     return d;
   };
 }
@@ -49,30 +49,30 @@ function skinPaint(p) {
   bl([0, H[1] - 0.025, H[2] + 0.12], 0.025, 0.9);
   return [r, g, b];
 }
-function headSDF(o) { // rostro esculpido: cráneo, mandíbula, mentón, pómulos, nariz, labios, arco de las cejas, orejas y cuello
-  const H = H0, jw = o.jaw ?? 0.074, ns = (o.nose ?? 1) * 0.9, ck = o.cheek ?? 0.034;
+function headSDF(o) { // cara estilizada y sencilla: óvalo, mandíbula fina, nariz pequeña, orejas y cuello
+  const H = H0, jw = o.jaw ?? 0.068, ns = (o.nose ?? 1) * 0.8;
   return (p) => {
-    let d = ell(p, [H[0], H[1] + 0.03, H[2] - 0.012], [0.09, 0.108, 0.102]);
-    d = smin(d, ell(p, [H[0], H[1] - 0.042, H[2] + 0.022], [jw, 0.064, 0.08]), 0.05);
-    d = smin(d, sph(p, [0, H[1] - 0.092, H[2] + 0.058], 0.027), 0.035);
-    for (const s of [-1, 1]) d = smin(d, sph(p, [s * 0.05, H[1] - 0.006, H[2] + 0.066], ck), 0.035);
-    d = smin(d, cap(p, [-0.05, H[1] + 0.046, H[2] + 0.078], [0.05, H[1] + 0.046, H[2] + 0.078], 0.017, 0.017), 0.035);
-    for (const s of [-1, 1]) d = smax(d, -sph(p, [s * 0.036, H[1] + 0.02, H[2] + 0.092], 0.0235), 0.01); // cuencas
-    d = smin(d, cap(p, [0, H[1] + 0.03, H[2] + 0.094], [0, H[1] - 0.018, H[2] + 0.112 + 0.006 * ns], 0.011 * ns, 0.017 * ns), 0.016); // puente
-    d = smin(d, sph(p, [0, H[1] - 0.022, H[2] + 0.113 + 0.006 * ns], 0.019 * ns), 0.012);
-    for (const s of [-1, 1]) d = smin(d, sph(p, [s * 0.017 * ns, H[1] - 0.031, H[2] + 0.1], 0.013), 0.01); // aletas
-    d = smin(d, ell(p, [0, H[1] - 0.058, H[2] + 0.086], [0.03, 0.02, 0.014]), 0.02);                     // boca (base de los labios)
-    for (const s of [-1, 1]) { d = smin(d, ell(p, [s * 0.091, H[1] + 0.0, H[2] - 0.01], [0.017, 0.034, 0.025]), 0.014); d = smax(d, -ell(p, [s * 0.099, H[1] + 0.0, H[2] - 0.004], [0.008, 0.02, 0.013]), 0.004); }
-    d = smin(d, cap(p, [0, 1.43, -0.005], [0, H[1] - 0.06, H[2] - 0.02], 0.056, 0.05), 0.03);
+    let d = ell(p, [H[0], H[1] + 0.025, H[2] - 0.01], [0.088, 0.108, 0.098]);              // cráneo
+    d = smin(d, ell(p, [H[0], H[1] - 0.04, H[2] + 0.018], [jw, 0.062, 0.074]), 0.035);       // mandíbula
+    d = smin(d, sph(p, [0, H[1] - 0.086, H[2] + 0.05], 0.022), 0.025);                      // mentón
+    for (const s of [-1, 1]) d = smax(d, -sph(p, [s * 0.035, H[1] + 0.02, H[2] + 0.088], 0.02), 0.008); // cuencas suaves
+    d = smin(d, cap(p, [0, H[1] + 0.02, H[2] + 0.088], [0, H[1] - 0.02, H[2] + 0.104 + 0.004 * ns], 0.008 * ns, 0.013 * ns), 0.012); // nariz
+    d = smin(d, sph(p, [0, H[1] - 0.022, H[2] + 0.104 + 0.004 * ns], 0.014 * ns), 0.008);
+    d = smin(d, ell(p, [0, H[1] - 0.056, H[2] + 0.08], [0.026, 0.016, 0.012]), 0.015);        // base de la boca
+    for (const s of [-1, 1]) { d = smin(d, ell(p, [s * 0.088, H[1] + 0.0, H[2] - 0.008], [0.014, 0.03, 0.022]), 0.01); d = smax(d, -ell(p, [s * 0.095, H[1], H[2] - 0.003], [0.006, 0.017, 0.011]), 0.003); }
+    d = smin(d, cap(p, [0, 1.43, -0.005], [0, H[1] - 0.06, H[2] - 0.02], 0.052, 0.048), 0.025);
     return d;
   };
 }
-function handSDF(s, curl = 0.6) { // palma, cuatro dedos algo curvados y pulgar
+function handSDF(s, curl = 0.5) { // mano estilizada: palma, bloque de dedos con surcos y pulgar
   const w = J[s > 0 ? 'wrL' : 'wrR'];
   return (p) => {
-    let d = ell(p, [w[0] + s * 0.004, w[1] - 0.046, w[2] + 0.008], [0.03, 0.05, 0.047]);
-    for (let f = 0; f < 4; f++) { const z = w[2] + 0.036 - f * 0.021; const a = [w[0] + s * 0.004, w[1] - 0.075, z], b = [w[0] + s * (0.008 + curl * 0.01), w[1] - 0.122 + f * 0.006 + curl * 0.014, z + curl * 0.016]; d = smin(d, cap(p, a, b, 0.0125, 0.0108), 0.014); }
-    d = smin(d, cap(p, [w[0] - s * 0.012, w[1] - 0.04, w[2] + 0.035], [w[0] - s * 0.01, w[1] - 0.085, w[2] + 0.062], 0.012, 0.0105), 0.014);
+    let d = rbox(p, [w[0] + s * 0.004, w[1] - 0.05, w[2] + 0.008], [0.017, 0.038, 0.036], 0.015);                     // palma
+    const fy = w[1] - 0.1, fz = w[2] + 0.008 + curl * 0.012;
+    let f = rbox(p, [w[0] + s * (0.006 + curl * 0.006), fy, fz], [0.014, 0.03, 0.033], 0.012);                         // dedos juntos
+    for (let k = 1; k < 4; k++) f = smax(f, -rbox(p, [w[0] + s * (0.006 + curl * 0.006), fy - 0.012, w[2] - 0.025 + k * 0.0165 + curl * 0.012], [0.02, 0.022, 0.0012], 0.001), 0.002); // separación entre dedos
+    d = smin(d, f, 0.012);
+    d = smin(d, cap(p, [w[0] - s * 0.008, w[1] - 0.04, w[2] + 0.036], [w[0] - s * 0.008, w[1] - 0.075, w[2] + 0.06], 0.011, 0.0095), 0.01); // pulgar
     return d;
   };
 }
@@ -108,32 +108,26 @@ function scientist() {
   const torsoC = (p) => { // bata: tronco algo más holgado + faldón acampanado, abierta por delante en V, con pliegues
     let d = torsoSDF(p, 1.06, 0.78) - 0.006;
     d = smin(d, cap(p, [0, 1.1, 0], [0, 0.6, -0.01], 0.165, 0.215, 1 / 0.8), 0.06);
-    const w = 0.022 + Math.max(0, 1.4 - p[1]) * 0.09; const open = Math.max(Math.abs(p[0]) - w, -(p[2] - 0.05)); d = smax(d, -open, 0.006);
+    const w = 0.022 + Math.max(0, 1.4 - p[1]) * 0.09; const open = Math.max(Math.abs(p[0]) - w, -(p[2] - 0.05)); d = smax(d, -open, 0.014);
     d = smax(d, 0.6 - p[1], 0.004);                                                         // dobladillo recto
-    d += p[1] < 1.05 ? -fold(p, 0.007, 40) * clamp((1.05 - p[1]) * 4, 0, 1) : -fold(p, 0.0022, 50);
-    for (let k = 0; k < 2; k++) { const sx = k ? 1 : -1; d = Math.min(d, rbox(p, [sx * 0.115, 0.885, 0.17 - 0.004 * (0.885 - 0.6)], [0.055, 0.012, 0.012], 0.003)); } // solapas de bolsillo
-    d = Math.min(d, rbox(p, [0.0, 1.0, 0.165], [0.006, 0.006, 0.006], 0.004));                // botón
-    for (const s of [-1, 1]) d = smin(d, cap(p, [s * 0.04, 1.43, 0.09], [s * (0.03 + 0.09 * 0.55), 1.2, 0.15], 0.012, 0.01), 0.012); // solapas
-    d = smax(d, -rbox(p, [0.11, 0.86, 0.165], [0.045, 0.004, 0.03], 0.002), 0.003); d = smax(d, -rbox(p, [-0.11, 0.86, 0.165], [0.045, 0.004, 0.03], 0.002), 0.003); // bolsillos
+    d += p[1] < 1.05 ? -fold(p, 0.0045, 32) * clamp((1.05 - p[1]) * 4, 0, 1) : 0;
     return d;
   };
   return {
     rules: { coat: 'skirt', tie: 'torso', shirt: 'torso' },
     parts: [
       { id: 'skin', color: '#e7b48f', mat: 'skin', h: 0.0035, lo: [-0.13, 1.42, -0.14], hi: [0.13, 1.82, 0.16], f: headSDF({ jaw: 0.072, nose: 1.1, cheek: 0.035 }), paint: skinPaint },
-      { id: 'lips', color: '#c27b72', mat: 'skin', h: 0.0022, lo: [-0.04, 1.565, 0.07], hi: [0.04, 1.61, 0.12], f: lipsSDF({ smile: 0.002 }) },
       { id: 'handL', color: '#e7b48f', mat: 'skin', h: 0.004, lo: [0.22, 0.72, -0.06], hi: [0.4, 0.95, 0.11], f: handSDF(1) },
       { id: 'handR', color: '#e7b48f', mat: 'skin', h: 0.004, lo: [-0.4, 0.72, -0.06], hi: [-0.22, 0.95, 0.11], f: handSDF(-1) },
       { id: 'hair', color: '#5a3d2b', mat: 'hair', h: 0.004, lo: [-0.13, 1.58, -0.15], hi: [0.13, 1.8, 0.12], f: hairSDF('part') },
-      { id: 'shirt', color: '#8ea7da', mat: 'cloth', h: 0.01, lo: [-0.22, 0.9, -0.18], hi: [0.22, 1.5, 0.2], f: (p) => { let d = smin(torsoSDF(p, 1, 0.74) - 0.002, cap(p, [0, 1.42, 0.0], [0, 1.49, 0.0], 0.068, 0.062), 0.012); for (const s of [-1, 1]) d = Math.min(d, cap(p, [s * 0.02, 1.48, 0.065], [s * 0.05, 1.43, 0.11], 0.012, 0.008, 1)); return d; }, hideIn: ['coat'] },
+      { id: 'shirt', color: '#8ea7da', mat: 'cloth', h: 0.01, lo: [-0.22, 0.9, -0.18], hi: [0.22, 1.5, 0.2], f: (p) => { let d = smin(torsoSDF(p, 1, 0.74) - 0.002, cap(p, [0, 1.42, 0.0], [0, 1.49, 0.0], 0.068, 0.062), 0.012); for (const s of [-1, 1]) d = Math.min(d, cap(p, [s * 0.02, 1.48, 0.065], [s * 0.05, 1.43, 0.11], 0.012, 0.008, 1)); return d; } },
       { id: 'tie', color: '#3d5a8a', mat: 'cloth', h: 0.004, lo: [-0.05, 1.12, 0.06], hi: [0.05, 1.47, 0.18], f: (p) => smin(cap(p, [0, 1.44, 0.135], [0, 1.16, 0.15], 0.012, 0.022, 3), sph(p, [0, 1.445, 0.128], 0.016), 0.01) },
-      { id: 'coat', color: coat, mat: 'cloth', h: 0.011, lo: [-0.3, 0.55, -0.24], hi: [0.3, 1.52, 0.25], f: (p) => smin(torsoC(p), Math.min(armSeg(p, 1, 0.06, 0.052, 0.047), armSeg(p, -1, 0.06, 0.052, 0.047)) - fold(p, 0.003, 70), 0.03) },
-      { id: 'cuffs', color: coatD, mat: 'cloth', h: 0.004, lo: [-0.38, 0.86, -0.06], hi: [0.38, 1.0, 0.09], f: both((p, s) => { const e = J[s > 0 ? 'elL' : 'elR'], w = J[s > 0 ? 'wrL' : 'wrR']; const ax = sub(w, e), la = len(ax); const t = dot(sub(p, w), ax) / la; return smax(cap(p, [w[0] + (e[0] - w[0]) * 0.18, w[1] + (e[1] - w[1]) * 0.18, w[2] + (e[2] - w[2]) * 0.18], w, 0.051, 0.05), Math.max(t - 0.0, -t - 0.045), 0.002); }) },
-      { id: 'pants', color: '#5d5967', mat: 'cloth', hideIn: ['coat'], h: 0.011, lo: [-0.2, 0.05, -0.12], hi: [0.2, 1.02, 0.12], f: (p) => smin(both((q, s) => legSeg(q, s, 0.082, 0.062, 0.054))(p) - joints(p), cap(p, [-0.08, 0.93, 0], [0.08, 0.93, 0], 0.12, 0.12, 1.25), 0.05) },
+      { id: 'coat', color: coat, mat: 'cloth', h: 0.0075, lo: [-0.3, 0.55, -0.24], hi: [0.3, 1.52, 0.25], f: (p) => smin(torsoC(p), Math.min(armSeg(p, 1, 0.06, 0.052, 0.047), armSeg(p, -1, 0.06, 0.052, 0.047)) - joints(p) * 0.6, 0.03) },
+      { id: 'pants', color: '#5d5967', mat: 'cloth', h: 0.011, lo: [-0.2, 0.05, -0.12], hi: [0.2, 1.02, 0.12], f: (p) => smin(both((q, s) => legSeg(q, s, 0.082, 0.062, 0.054))(p) - joints(p), cap(p, [-0.08, 0.93, 0], [0.08, 0.93, 0], 0.12, 0.12, 1.25), 0.05) },
       { id: 'shoes', color: '#3a2e2a', mat: 'leather', h: 0.008, lo: [-0.18, -0.01, -0.1], hi: [0.18, 0.18, 0.2], f: (p) => Math.min(shoeSDF(1)(p), shoeSDF(-1)(p)) },
       { id: 'soles', color: '#1d1a19', mat: 'rubber', h: 0.008, lo: [-0.18, -0.01, -0.1], hi: [0.18, 0.05, 0.2], f: (p) => Math.min(soleSDF(1)(p), soleSDF(-1)(p)) },
     ],
-    extras: 'scientist', iris: '#4f7d4a', hairCol: '#5a3d2b', skin: '#e7b48f',
+    extras: 'scientist', iris: '#2f8fd8', lip: '#b56a62', smile: 0.004, hairCol: '#5a3d2b', skin: '#e7b48f',
   };
 }
 function guard() {
@@ -152,18 +146,17 @@ function guard() {
     rules: { vest: 'torso', pouch: 'torso', belt: 'torso', collar: 'torso' },
     parts: [
       { id: 'skin', color: '#c98f6a', mat: 'skin', h: 0.0035, lo: [-0.13, 1.42, -0.14], hi: [0.13, 1.82, 0.16], f: headSDF({ jaw: 0.082, nose: 0.95, cheek: 0.032 }), paint: skinPaint },
-      { id: 'lips', color: '#a86452', mat: 'skin', h: 0.0022, lo: [-0.04, 1.565, 0.07], hi: [0.04, 1.61, 0.12], f: lipsSDF({ smile: -0.001 }) },
       { id: 'suit', color: suit, mat: 'cloth', hideIn: ['vest', 'gloves', 'boots'], h: 0.011, lo: [-0.3, 0.05, -0.2], hi: [0.3, 1.52, 0.2], f: (p) => smin(Math.min(torsoSDF(p, 1.04, 0.76), armSeg(p, 1, 0.062, 0.054, 0.047), armSeg(p, -1, 0.062, 0.054, 0.047)), both((q, s) => legSeg(q, s, 0.086, 0.065, 0.056))(p), 0.05) - fold(p, 0.0016, 60) - joints(p) },
       { id: 'vest', color: vest, mat: 'plastic', h: 0.01, lo: [-0.26, 0.98, -0.18], hi: [0.26, 1.5, 0.2], f: vestF },
       { id: 'pouch', color: '#3c3f45', mat: 'cloth', h: 0.008, lo: [-0.2, 1.04, 0.09], hi: [0.2, 1.38, 0.2], f: pouches },
       { id: 'belt', color: '#1c1d20', mat: 'leather', h: 0.008, lo: [-0.22, 0.88, -0.18], hi: [0.22, 1.0, 0.2], f: (p) => Math.max(cap(p, [0, 0.9, 0], [0, 1.0, 0], 0.168, 0.162, 1 / 0.78), Math.abs(p[1] - 0.95) - 0.026) },
       { id: 'pads', color: '#2f3136', mat: 'plastic', h: 0.008, lo: [-0.2, 0.4, -0.04], hi: [0.2, 0.6, 0.12], f: both((p, s) => smin(rbox(p, [s * 0.105, 0.5, 0.062], [0.048, 0.058, 0.026], 0.012), rbox(p, [s * 0.105, 0.5, 0.04], [0.06, 0.012, 0.03], 0.004), 0.004)) },
-      { id: 'gloves', color: '#2b2d31', mat: 'leather', h: 0.004, lo: [-0.4, 0.72, -0.06], hi: [0.4, 0.97, 0.11], f: (p) => Math.min(handSDF(1, 0.7)(p) - 0.003, handSDF(-1, 0.7)(p) - 0.003, both((q, s) => smax(cap(q, J[s > 0 ? 'wrL' : 'wrR'], [J[s > 0 ? 'wrL' : 'wrR'][0], J[s > 0 ? 'wrL' : 'wrR'][1] + 0.07, J[s > 0 ? 'wrL' : 'wrR'][2]], 0.054, 0.058), J[s > 0 ? 'wrL' : 'wrR'][1] + 0.07 - q[1] > 0 ? -1 : q[1] - J[s > 0 ? 'wrL' : 'wrR'][1] - 0.07, 0.002))(p)) },
+      { id: 'gloves', color: '#2b2d31', mat: 'leather', h: 0.004, lo: [-0.4, 0.72, -0.06], hi: [0.4, 0.97, 0.11], f: (p) => Math.min(handSDF(1, 0.6)(p) - 0.003, handSDF(-1, 0.6)(p) - 0.003, both((q, s) => smax(cap(q, J[s > 0 ? 'wrL' : 'wrR'], [J[s > 0 ? 'wrL' : 'wrR'][0], J[s > 0 ? 'wrL' : 'wrR'][1] + 0.07, J[s > 0 ? 'wrL' : 'wrR'][2]], 0.054, 0.058), J[s > 0 ? 'wrL' : 'wrR'][1] + 0.07 - q[1] > 0 ? -1 : q[1] - J[s > 0 ? 'wrL' : 'wrR'][1] - 0.07, 0.002))(p)) },
       { id: 'boots', color: '#202226', mat: 'leather', h: 0.008, lo: [-0.18, -0.01, -0.1], hi: [0.18, 0.3, 0.2], f: (p) => Math.min(shoeSDF(1, 0.14)(p), shoeSDF(-1, 0.14)(p)) },
       { id: 'soles', color: '#121315', mat: 'rubber', h: 0.008, lo: [-0.18, -0.01, -0.1], hi: [0.18, 0.05, 0.2], f: (p) => Math.min(soleSDF(1)(p), soleSDF(-1)(p)) },
       { id: 'helmet', color: '#4a4e55', mat: 'plastic', h: 0.004, lo: [-0.15, 1.6, -0.16], hi: [0.15, 1.83, 0.16], f: (p) => { let d = ell(p, [0, H0[1] + 0.07, H0[2] - 0.01], [0.112, 0.105, 0.12]); d = Math.min(d, cap(p, [0, H0[1] + 0.045, -0.005], [0, H0[1] + 0.056, -0.005], 0.126, 0.123, 0.95)); for (const s of [-1, 1]) d = Math.min(d, rbox(p, [s * 0.112, H0[1] + 0.07, -0.01], [0.006, 0.012, 0.05], 0.003)); return smax(d, -(p[1] - (H0[1] + 0.04)), 0.002); } },
       { id: 'collar', color: '#1f2125', mat: 'cloth', h: 0.004, lo: [-0.09, 1.4, -0.09], hi: [0.09, 1.52, 0.09], f: (p) => cap(p, [0, 1.42, 0], [0, 1.5, 0.005], 0.064, 0.06) },
     ],
-    extras: 'guard', iris: '#5a3a22', hairCol: '#2a1d17', skin: '#c98f6a',
+    extras: 'guard', iris: '#3f9a52', lip: '#93574a', smile: -0.002, hairCol: '#2a1d17', skin: '#c98f6a',
   };
 }
