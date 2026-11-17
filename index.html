@@ -27787,18 +27787,20 @@ function drawFlatPerson(ctx, dept, { back, frame, skinI, hairI, flags, varI = 0 
 
 // Fase 56 (estilo EG2): cada pieza recibe sombra interior abajo-derecha y brillo arriba-izquierda,
 // lo que da el aspecto de figura 3D suave de la imagen de referencia. Se dibuja una vez y queda en caché.
+const isRealCtx = (ctx) => typeof CanvasRenderingContext2D !== 'undefined' && ctx instanceof CanvasRenderingContext2D; // Fase 56.4: no en la captura 3D
 function vol3d(ctx, path, lod, k = 1) {
-  const s = ctx.getTransform().a;
-  if (s < 0.45) return;
+  // Sin sombras difuminadas del lienzo (fallan con aceleración por GPU): bandas de trazo recortadas a la pieza,
+  // desplazadas hacia arriba-izquierda (sombra abajo-derecha) y hacia abajo-derecha (brillo arriba-izquierda).
+  if (!isRealCtx(ctx)) return;
+  if (ctx.getTransform().a < 0.45) return;
   ctx.save();
   ctx.beginPath(); path(); ctx.clip();
-  const pass = (c, dx, dy, blur) => {
-    ctx.beginPath(); path(); ctx.rect(-160, -200, 320, 320); // path() puede empezar con beginPath (roundRect)
-    ctx.shadowColor = c; ctx.shadowBlur = blur * s; ctx.shadowOffsetX = dx * s; ctx.shadowOffsetY = dy * s;
-    ctx.fillStyle = '#000'; ctx.fill('evenodd');
-  };
-  pass(`rgba(0,0,0,${0.34 * k})`, -1.5, -1.7, 2.6);
-  if (!lod) pass(`rgba(255,255,255,${0.30 * k})`, 0.9, 1.0, 1.4);
+  ctx.lineJoin = 'round'; ctx.lineCap = 'round';
+  const band = (dx, dy, w, c) => { ctx.save(); ctx.translate(dx, dy); ctx.beginPath(); path(); ctx.restore(); ctx.lineWidth = w; ctx.strokeStyle = c; ctx.stroke(); };
+  band(-1.6, -1.7, 4.6, `rgba(0,0,0,${0.11 * k})`);
+  band(-1.2, -1.3, 2.8, `rgba(0,0,0,${0.12 * k})`);
+  band(-0.8, -0.9, 1.4, `rgba(0,0,0,${0.1 * k})`);
+  if (!lod) { band(1.1, 1.2, 2.6, `rgba(255,255,255,${0.12 * k})`); band(0.8, 0.9, 1.3, `rgba(255,255,255,${0.14 * k})`); }
   ctx.restore();
 }
 
@@ -27814,7 +27816,7 @@ function flatFigure(ctx, o) {
   const tube = (pts, w, c) => {
     ctx.lineCap = 'round'; ctx.lineJoin = 'round';
     const line = (wd, cc, ox = 0, oy = 0) => { ctx.strokeStyle = cc; ctx.lineWidth = wd; ctx.beginPath(); ctx.moveTo(pts[0][0] + ox, pts[0][1] + oy); for (const p of pts.slice(1)) ctx.lineTo(p[0] + ox, p[1] + oy); ctx.stroke(); };
-    if (halo || typeof c !== 'string' || c[0] !== '#') line(w + (halo ? HW : 0), col(c));
+    if (halo || typeof c !== 'string' || c[0] !== '#' || !isRealCtx(ctx)) line(w + (halo ? HW : 0), col(c));
     else { // Fase 56: cilindro con luz desde arriba a la izquierda
       line(w, shade(c, -0.24));
       line(w * 0.64, c, -w * 0.13, -w * 0.09);
@@ -28455,16 +28457,18 @@ const ANOM = { w: 44, h: 76, ax: 22, ay: 70 };
 
 
 function anomKit(ctx, halo, lod) {
-  const HW = lod ? 2.2 : 1.6;
+  const HW = lod ? 1.5 : 1.0;                               // Fase 56.4: contorno fino (antes 2,2 / 1,6)
   const col = (c) => (halo ? FLAT_HALO : c);
   const fill = (path, c) => {
     ctx.beginPath(); path(); ctx.fillStyle = col(c); ctx.fill();
     if (halo) { ctx.lineWidth = HW; ctx.lineJoin = 'round'; ctx.strokeStyle = FLAT_HALO; ctx.stroke(); }
+    else if (typeof c === 'string' && c[0] === '#') vol3d(ctx, path, lod, 0.9); // Fase 56.4: volumen suave por pieza (estilo EG2)
   };
   const tube = (pts, w, c) => {
     ctx.lineCap = 'round'; ctx.lineJoin = 'round';
-    ctx.strokeStyle = col(c); ctx.lineWidth = w + (halo ? HW : 0);
-    ctx.beginPath(); ctx.moveTo(pts[0][0], pts[0][1]); for (const p of pts.slice(1)) ctx.lineTo(p[0], p[1]); ctx.stroke();
+    const ln = (wd, cc, ox = 0, oy = 0) => { ctx.strokeStyle = cc; ctx.lineWidth = wd; ctx.beginPath(); ctx.moveTo(pts[0][0] + ox, pts[0][1] + oy); for (const p of pts.slice(1)) ctx.lineTo(p[0] + ox, p[1] + oy); ctx.stroke(); };
+    if (halo || typeof c !== 'string' || c[0] !== '#' || c.length !== 7 || w < 1.6 || !isRealCtx(ctx)) ln(w + (halo ? HW : 0), col(c));
+    else { ln(w, shade(c, -0.22)); ln(w * 0.64, c, -w * 0.13, -w * 0.09); if (!lod) ln(w * 0.24, shade(c, 0.2), -w * 0.25, -w * 0.17); } // Fase 56.4: cilindro
     ctx.lineCap = 'butt';
   };
   const poly = (pts, c) => fill(() => { ctx.moveTo(pts[0][0], pts[0][1]); for (const p of pts.slice(1)) ctx.lineTo(p[0], p[1]); ctx.closePath(); }, c);
@@ -29383,37 +29387,44 @@ def('anomaly_017', {
   },
 });
 
+// Fase 56.4: dibujo en perspectiva isométrica (cajas con volumen) aunque se cree durante la captura 3D
+function isoSprite(ctx, draw) { if (!isRealCtx(ctx)) return; const cap = CAPBOX.cap, bk = CAPBOX.back; CAPBOX.cap = null; CAPBOX.back = null; ctx.save(); ctx.translate(0, -WORLD.HH); try { draw(); } finally { ctx.restore(); CAPBOX.cap = cap; CAPBOX.back = bk; } }
+/** Contexto plano sobre la cara frontal +v (v = d) de una caja: x en «unidades» a lo largo de u (36 por casilla), y hacia abajo = −z. */
+function onFaceV(ctx, d, u0, draw) { const o = P(u0, d, 0); ctx.save(); ctx.transform(WORLD.HW / 36, WORLD.HH / 36, 0, 1, o.x, o.y); draw(); ctx.restore(); }
+
 def('anomaly_914', {
-  w: 80, h: 64, ax: 40, ay: 54,
+  w: 84, h: 74, ax: 42, ay: 56, // Fase 56.4: algo más de margen para el dibujo en perspectiva
   draw(ctx, params) {
     const fr = Number(params) || 0;
-    const gear = (x, y, r, teeth, a, col) => {
-      ctx.save(); ctx.translate(x, y); ctx.rotate(a);
-      ctx.fillStyle = col; ctx.beginPath();
-      for (let i = 0; i < teeth * 2; i++) { const ang = (i / (teeth * 2)) * Math.PI * 2; const rr = i % 2 ? r : r * 1.28; ctx.lineTo(Math.cos(ang) * rr, Math.sin(ang) * rr); }
-      ctx.closePath(); ctx.fill();
-      ctx.fillStyle = '#4a3820'; ctx.beginPath(); ctx.arc(0, 0, r * 0.35, 0, 7); ctx.fill();
-      ctx.restore();
-    };
-    ctx.fillStyle = 'rgba(0,0,0,0.35)'; ctx.beginPath(); ctx.ellipse(0, 0, 32, 9, 0, 0, 7); ctx.fill();
-    // cabinas de entrada y salida
-    ctx.fillStyle = '#5f6872'; ctx.fillRect(-36, -26, 11, 26); ctx.fillRect(25, -26, 11, 26);
-    ctx.fillStyle = '#3f464e'; ctx.fillRect(-34, -22, 7, 14); ctx.fillRect(27, -22, 7, 14);
-    // tubos de cobre
-    ctx.fillStyle = '#b8743a'; ctx.fillRect(-25, -18, 6, 3); ctx.fillRect(19, -18, 6, 3);
-    // cuerpo de latón
-    ctx.fillStyle = '#8a6a3a'; ctx.fillRect(-20, -36, 40, 36);
-    ctx.fillStyle = '#a8844a'; ctx.fillRect(-20, -40, 40, 5);
-    ctx.fillStyle = '#6f5430'; ctx.fillRect(-20, -4, 40, 4);
-    // engranajes que giran
-    const a = fr * (Math.PI / 8);
-    gear(-9, -22, 6, 8, a, '#c9a45c');
-    gear(5, -18, 4.4, 7, -a * 1.35, '#d8b870');
-    gear(10, -28, 3.4, 6, a * 1.6, '#b8923f');
-    // mando de cinco posiciones y llave
-    ctx.fillStyle = '#2d2418'; ctx.beginPath(); ctx.arc(-10, -9, 4, 0, 7); ctx.fill();
-    ctx.strokeStyle = '#e8d9b0'; ctx.lineWidth = 1; ctx.beginPath(); ctx.moveTo(-10, -9); ctx.lineTo(-7, -12); ctx.stroke();
-    ctx.fillStyle = '#d8b870'; ctx.fillRect(6, -10, 7, 2.2); ctx.beginPath(); ctx.arc(14, -9, 2.6, 0, 7); ctx.fill();
+    ctx.fillStyle = 'rgba(0,0,0,0.3)'; ctx.beginPath(); ctx.ellipse(0, 0, 32, 10, 0, 0, 7); ctx.fill();
+    isoSprite(ctx, () => {
+      const gear = (x, y, r, teeth, a, col) => {
+        ctx.save(); ctx.translate(x, y); ctx.rotate(a);
+        ctx.beginPath(); for (let i = 0; i < teeth * 2; i++) { const ang = (i / (teeth * 2)) * Math.PI * 2; const rr = i % 2 ? r : r * 1.28; ctx.lineTo(Math.cos(ang) * rr, Math.sin(ang) * rr); } ctx.closePath();
+        const g = ctx.createRadialGradient(-r * 0.4, -r * 0.4, 0, 0, 0, r * 1.3); g.addColorStop(0, shade(col, 0.35)); g.addColorStop(1, shade(col, -0.25)); ctx.fillStyle = g; ctx.fill();
+        ctx.fillStyle = '#4a3820'; ctx.beginPath(); ctx.arc(0, 0, r * 0.35, 0, 7); ctx.fill();
+        ctx.restore();
+      };
+      const booth = (u0, u1) => { // cabinas de entrada y salida
+        box(ctx, u0, u1, 0.36, 0.64, 0, 27, { top: '#8a939c', left: '#6b747e', right: '#525a63' });
+        faceV(ctx, 0.64, u0 + 0.05, u1 - 0.05, 3, 21, '#363c43');
+        faceV(ctx, 0.64, u0 + 0.06, u1 - 0.06, 18, 19.5, 'rgba(255,255,255,0.25)');
+      };
+      booth(-0.2, 0.12);
+      box(ctx, 0.1, 0.24, 0.46, 0.54, 13, 17, '#c07a3c');                                                  // tubos de cobre
+      box(ctx, 0.22, 0.78, 0.28, 0.72, 0, 30, { top: '#c29a58', left: '#9a7540', right: '#735632' });       // cuerpo de latón
+      box(ctx, 0.2, 0.8, 0.26, 0.74, 30, 34, { top: '#d8b46c', left: '#b08a4c', right: '#8a6a3a' });
+      faceV(ctx, 0.72, 0.22, 0.78, 0, 3, '#5e4628');
+      onFaceV(ctx, 0.72, 0.22, () => {
+        const a = fr * (Math.PI / 8);
+        gear(5.5, -19, 4.6, 8, a, '#d0aa5e'); gear(13, -13.5, 3.4, 7, -a * 1.35, '#e0c078'); gear(14.5, -23.5, 2.7, 6, a * 1.6, '#c09a48');
+        ctx.fillStyle = '#2d2418'; ctx.beginPath(); ctx.arc(5.5, -7.5, 3, 0, 7); ctx.fill();
+        ctx.strokeStyle = '#e8d9b0'; ctx.lineWidth = 0.9; ctx.beginPath(); ctx.moveTo(5.5, -7.5); ctx.lineTo(7.7, -9.7); ctx.stroke();
+        ctx.fillStyle = '#e2c27a'; ctx.fillRect(11, -8.4, 4.5, 1.8); ctx.beginPath(); ctx.arc(16.3, -7.5, 1.9, 0, 7); ctx.fill();
+      });
+      box(ctx, 0.76, 0.9, 0.46, 0.54, 13, 17, '#c07a3c');
+      booth(0.88, 1.2);
+    });
   },
 });
 
@@ -29425,10 +29436,16 @@ def('anomaly_035', {
     const worn = mode === 'worn' || mode === 'persuading';
     ctx.fillStyle = 'rgba(0,0,0,0.35)'; ctx.beginPath(); ctx.ellipse(0, 0, 12, 4, 0, 0, 7); ctx.fill();
     if (!worn) {
-      // máscara dentro de una urna de cristal sobre un pedestal
-      ctx.fillStyle = '#3b4249'; ctx.fillRect(-8, -14, 16, 14);
-      ctx.fillStyle = 'rgba(170,215,235,0.28)'; ctx.fillRect(-9, -34, 18, 22);
-      ctx.strokeStyle = 'rgba(190,225,240,0.8)'; ctx.lineWidth = 1; ctx.strokeRect(-9, -34, 18, 22);
+      // máscara dentro de una urna de cristal sobre un pedestal (Fase 56.4: en volumen)
+      isoSprite(ctx, () => {
+        box(ctx, 0.36, 0.64, 0.36, 0.64, 0, 13, { top: '#5a626b', left: '#3f464e', right: '#2e3439' });
+        box(ctx, 0.34, 0.66, 0.34, 0.66, 13, 15, '#2a2f34');
+        const q = [[0.36, 0.64], [0.64, 0.64], [0.64, 0.36]].map(([u, v]) => [P(u, v, 15), P(u, v, 37)]);
+        ctx.fillStyle = 'rgba(170,215,235,0.22)'; ctx.beginPath(); ctx.moveTo(q[0][0].x, q[0][0].y); ctx.lineTo(q[1][0].x, q[1][0].y); ctx.lineTo(q[2][0].x, q[2][0].y); ctx.lineTo(q[2][1].x, q[2][1].y); ctx.lineTo(P(0.36, 0.36, 37).x, P(0.36, 0.36, 37).y); ctx.lineTo(q[0][1].x, q[0][1].y); ctx.closePath(); ctx.fill();
+        ctx.strokeStyle = 'rgba(200,232,245,0.85)'; ctx.lineWidth = 0.8; ctx.stroke();
+        ctx.beginPath(); ctx.moveTo(q[1][0].x, q[1][0].y); ctx.lineTo(q[1][1].x, q[1][1].y); ctx.lineTo(q[0][1].x, q[0][1].y); ctx.moveTo(q[1][1].x, q[1][1].y); ctx.lineTo(q[2][1].x, q[2][1].y); ctx.stroke();
+        ctx.strokeStyle = 'rgba(255,255,255,0.5)'; ctx.lineWidth = 1.2; const r0 = P(0.4, 0.64, 33), r1 = P(0.4, 0.64, 22); ctx.beginPath(); ctx.moveTo(r0.x, r0.y); ctx.lineTo(r1.x, r1.y); ctx.stroke();
+      });
       ctx.fillStyle = '#f2eee6'; ctx.beginPath(); ctx.ellipse(0, -24, 5.2, 6.4, 0, 0, 7); ctx.fill();
       ctx.fillStyle = '#1c1c1c'; ctx.beginPath(); ctx.ellipse(-2, -25, 1.3, 0.8, 0, 0, 7); ctx.ellipse(2, -25, 1.3, 0.8, 0, 0, 7); ctx.fill();
       ctx.strokeStyle = '#1c1c1c'; ctx.beginPath(); ctx.arc(0, -23, 2.6, 0.2, Math.PI - 0.2); ctx.stroke();
@@ -29455,10 +29472,17 @@ def('anomaly_999', {
     const ill = mode === 'ill';
     const sq = ill ? 0.62 : 1 + 0.07 * Math.sin(fr * (Math.PI / 2));
     ctx.fillStyle = 'rgba(0,0,0,0.3)'; ctx.beginPath(); ctx.ellipse(0, 0, 14, 4.6, 0, 0, 7); ctx.fill();
-    ctx.fillStyle = ill ? 'rgba(190,170,110,0.92)' : 'rgba(242,150,42,0.93)';
-    ctx.beginPath(); ctx.moveTo(-14, 0); ctx.bezierCurveTo(-14, -26 * sq, 14, -26 * sq, 14, 0); ctx.closePath(); ctx.fill();
-    ctx.fillStyle = ill ? 'rgba(220,205,150,0.6)' : 'rgba(255,205,120,0.65)';
-    ctx.beginPath(); ctx.ellipse(-4, -13 * sq, 4, 2.4 * sq, -0.5, 0, 7); ctx.fill();
+    { // Fase 56.4: gelatina brillante (degradado con núcleo claro, borde oscuro y reflejo)
+      const g = ctx.createRadialGradient(-4, -14 * sq, 1, 0, -8 * sq, 19);
+      if (ill) { g.addColorStop(0, 'rgba(232,218,165,0.95)'); g.addColorStop(0.6, 'rgba(190,170,110,0.93)'); g.addColorStop(1, 'rgba(130,112,66,0.95)'); }
+      else { g.addColorStop(0, 'rgba(255,214,130,0.96)'); g.addColorStop(0.55, 'rgba(244,150,40,0.94)'); g.addColorStop(1, 'rgba(196,92,18,0.96)'); }
+      ctx.fillStyle = g;
+      ctx.beginPath(); ctx.moveTo(-14, 0); ctx.bezierCurveTo(-14, -26 * sq, 14, -26 * sq, 14, 0); ctx.closePath(); ctx.fill();
+      ctx.strokeStyle = ill ? 'rgba(110,94,52,0.6)' : 'rgba(150,66,10,0.55)'; ctx.lineWidth = 0.9; ctx.stroke();
+    }
+    ctx.fillStyle = 'rgba(255,255,255,0.75)';
+    ctx.beginPath(); ctx.ellipse(-5, -14 * sq, 3.6, 1.8 * sq, -0.5, 0, 7); ctx.fill();
+    ctx.beginPath(); ctx.arc(-9, -7 * sq, 1, 0, 7); ctx.fill();
     ctx.fillStyle = '#3a2412';
     const ey = -9 * sq;
     ctx.beginPath(); ctx.arc(-4, ey, 1.5, 0, 7); ctx.arc(4, ey, 1.5, 0, 7); ctx.fill();
