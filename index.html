@@ -26951,11 +26951,15 @@ furniture('plant', 34, (f, ctx) => {
   }
 });
 
-furniture('weapon_locker', 48, (f) => {
-  f.box(0.15, 0.85, D0, 0.42, 0, 44, '#3e4a3c');
-  f.front(0.42, 0.18, 0.82, 4, 40, '#33402f');
-  for (let i = 0; i < 6; i++) f.front(0.42, 0.22 + i * 0.1, 0.25 + i * 0.1, 8, 36, '#1d241b');
-  f.front(0.42, 0.18, 0.82, 40, 42, '#c94a43');
+furniture('weapon_locker', 48, (f) => { // Fase 57: armero grafito con puerta de cristal, carabinas y franja roja
+  f.box(0.15, 0.85, D0, 0.42, 0, 44, { top: '#5d6168', left: '#4a4e55', right: '#35383e' });
+  f.front(0.42, 0.18, 0.82, 4, 39, '#25282d');
+  for (let i = 0; i < 5; i++) { const a = 0.24 + i * 0.12; f.front(0.42, a, a + 0.035, 9, 35, '#3a3f46'); f.front(0.42, a - 0.01, a + 0.045, 18, 22, '#2c3036'); }
+  f.front(0.42, 0.18, 0.82, 4, 39, 'rgba(150,200,230,0.16)');
+  f.front(0.42, 0.2, 0.3, 34, 37.5, 'rgba(255,255,255,0.3)');
+  f.front(0.42, 0.15, 0.85, 40, 42.5, '#d6453a');
+  f.front(0.42, 0.15, 0.85, 0, 3, '#e8b931');
+  f.dot(0.78, 0.42, 22, 1.1, '#36d399');
 });
 
 furniture('locker', 48, (f) => {
@@ -27764,6 +27768,13 @@ const FLAT_LOOKS = {
     vest: '#202125', vestD: '#17181b', pouch: '#2c2d32', knee: '#1c1d20', hair: false, chunky: true,
     mask: '#2e2f33', maskD: '#1d1e21', lens: '#ff2a1c', lensL: '#ffc2b5', filter: '#3b3c41', glow: '255,45,30', mag: '#26272b', gun: '#1e1f22',
   },
+  // Fase 57: fuerza especial E-11 (Seguridad con «Respuesta táctica»), a juego con la figura 3D
+  e11: {
+    suit: '#3e4a57', suitD: '#323c47', legs: '#3a4552', legsD: '#2f3843',
+    shoe: '#1e2329', boot: true, hand: '#2a313a', helmet: '#64798c', helmetD: '#4f6172', visor: '#8ff0ff',
+    vest: '#64798c', vestD: '#53667a', pouch: '#4c5d6d', knee: '#64798c', hair: false, chunky: true,
+    mask: '#4f6070', maskD: '#3a4756', lens: '#8ff0ff', lensL: '#ffffff', filter: '#3a4552', glow: '120,230,255', mag: '#3a4552', gun: '#2a323c', band: '#e0703a',
+  },
   containment: {
     suit: '#e8c64c', suitD: '#c9a733', legs: '#e8c64c', legsD: '#c9a733', shoe: '#222428', boot: true,
     hand: '#232528', visor: '#1f2a34', visorL: '#7fa3bd', tank: '#8f989f', tankD: '#6f777e', tape: '#3a3c40',
@@ -27787,7 +27798,7 @@ function flatTraits(dept, skinI, hairI) {
 function drawFlatPerson(ctx, dept, { back, frame, skinI, hairI, flags, varI = 0 }) {
   const idx = (v, n) => (((Number(v) || 0) % n) + n) % n;
   skinI = idx(skinI, FLAT_SKIN.length); hairI = idx(hairI, FLAT_HAIR.length);
-  const L = FLAT_LOOKS[dept] ?? FLAT_LOOKS.administration;
+  const L = (dept === 'security' && flags.includes('t') ? FLAT_LOOKS.e11 : FLAT_LOOKS[dept]) ?? FLAT_LOOKS.administration;
   const T = flatTraits(dept, Number(skinI) || 0, Number(hairI) || 0);
   const sick = flags.includes('i') || flags.includes('d');
   const baseSkin = FLAT_SKIN[(Number(skinI) || 0) % FLAT_SKIN.length];
@@ -30664,6 +30675,7 @@ class Renderer {
       const armedRoles = ['hold', 'recontain', 'close', 'restrain', 'neutralize'];
       if (t?.type === 'response' && armedRoles.includes(t.role) && e.department === 'security') flags += 'g';
       if (e.department === 'containment') { if (t?.type === 'response') flags += 'r'; if (e.specialist) flags += 's'; }
+      if (e.department === 'security' && e.spec === 'tactical') flags += 't'; // Fase 57: aspecto de fuerza especial E-11 (solo visual)
       if (e.health === 'recovering') flags += 'h'; // Fase 9C: vendaje mientras dure la recuperación real
       const inst = t?.anomalyId ? st.anomalies.get(t.anomalyId) : null;
       const patient = t?.patientId ? st.personnel.get(t.patientId) : null;
@@ -45402,6 +45414,9 @@ class Buf {
 }
 const LIGHT = (() => { const l = [0.42, 0.8, 0.43]; const k = Math.hypot(...l); return l.map((x) => x / k); })();
 const LIMB_R = new Float32Array(1024); // memoria de trabajo de limb/orb
+// Fase 57 (estilo low poly 3D): miembros y esferas con pocas caras y un tono por cara (facetado), luz más contrastada
+const LOWPOLY = true; const LP_A = 0.64, LP_B = 0.44;
+const lpShade = (d) => (LOWPOLY ? LP_A + LP_B * Math.max(-0.6, d) : 0.74 + 0.32 * Math.max(-0.6, d));
 class Geo {
   constructor() { this.tri = new Buf(); this.tra = new Buf(256); this.lin = new Buf(512); this.ox = 0; this.oz = 0; this.oy = 0; this.bills = []; }
   reset() { this.tri.reset(); this.tra.reset(); this.lin.reset(); this.bills.length = 0; this.ox = this.oz = this.oy = 0; }
@@ -45439,36 +45454,38 @@ class Geo {
   /** Miembro: tronco de cono de sección ovalada entre dos puntos locales a → b (radios ra, rb; fl = fondo/ancho), con
    * extremos redondeados opcionales. Sombreado suave por vértice. */
   limb(A, a, b, ra, rb, color, fl = 1, n = 7, capA = true, capB = true) {
-    const c = col(color); if (!c) return; const bf = this.tri; bf.need(n * 6 + (capA ? n * 3 : 0) + (capB ? n * 3 : 0));
+    const c = col(color); if (!c) return; if (LOWPOLY) n = Math.min(n, n >= 9 ? 8 : 6); const bf = this.tri; bf.need(n * 6 + (capA ? n * 3 : 0) + (capB ? n * 3 : 0));
     let dx = b[0] - a[0], dy = b[1] - a[1], dz = b[2] - a[2]; const L = Math.hypot(dx, dy, dz) || 1e-6; dx /= L; dy /= L; dz /= L;
     let sx = 1, sy = 0, sz = 0; if (Math.abs(dx) > 0.9) { sx = 0; sz = 1; }
     const d = sx * dx + sy * dy + sz * dz; sx -= d * dx; sy -= d * dy; sz -= d * dz; const sl = Math.hypot(sx, sy, sz); sx /= sl; sy /= sl; sz /= sl;
     const fx = dy * sz - dz * sy, fy = dz * sx - dx * sz, fz = dx * sy - dy * sx;
     const k = 1 / Math.hypot(A[0], A[3], A[6]); const R = LIMB_R;
-    const sh = (x, y, z) => 0.74 + 0.32 * Math.max(-0.6, k * ((A[0] * x + A[1] * y + A[2] * z) * LIGHT[0] + (A[3] * x + A[4] * y + A[5] * z) * LIGHT[1] + (A[6] * x + A[7] * y + A[8] * z) * LIGHT[2]));
+    const sh = (x, y, z) => lpShade(k * ((A[0] * x + A[1] * y + A[2] * z) * LIGHT[0] + (A[3] * x + A[4] * y + A[5] * z) * LIGHT[1] + (A[6] * x + A[7] * y + A[8] * z) * LIGHT[2]));
     for (let i = 0; i <= n; i++) { const t = i / n * Math.PI * 2, cs = Math.cos(t), sn = Math.sin(t); const nx = cs * sx + sn * fx, ny = cs * sy + sn * fy, nz = cs * sz + sn * fz; const ox = cs * sx + sn * fl * fx, oy = cs * sy + sn * fl * fy, oz = cs * sz + sn * fl * fz;
       const j = i * 7; const xa = a[0] + ra * ox, ya = a[1] + ra * oy, za = a[2] + ra * oz, xb = b[0] + rb * ox, yb = b[1] + rb * oy, zb = b[2] + rb * oz;
       R[j] = A[0] * xa + A[1] * ya + A[2] * za + A[9]; R[j + 1] = A[3] * xa + A[4] * ya + A[5] * za + A[10]; R[j + 2] = A[6] * xa + A[7] * ya + A[8] * za + A[11];
       R[j + 3] = A[0] * xb + A[1] * yb + A[2] * zb + A[9]; R[j + 4] = A[3] * xb + A[4] * yb + A[5] * zb + A[10]; R[j + 5] = A[6] * xb + A[7] * yb + A[8] * zb + A[11]; R[j + 6] = sh(nx, ny, nz); }
-    for (let i = 0; i < n; i++) { const p = i * 7, q = p + 7; bf.v(R[p], R[p + 1], R[p + 2], c, R[p + 6]); bf.v(R[p + 3], R[p + 4], R[p + 5], c, R[p + 6]); bf.v(R[q + 3], R[q + 4], R[q + 5], c, R[q + 6]); bf.v(R[p], R[p + 1], R[p + 2], c, R[p + 6]); bf.v(R[q + 3], R[q + 4], R[q + 5], c, R[q + 6]); bf.v(R[q], R[q + 1], R[q + 2], c, R[q + 6]); }
+    if (LOWPOLY) for (let i = 0; i < n; i++) { const p = i * 7, q = p + 7; const f = (R[p + 6] + R[q + 6]) / 2; bf.v(R[p], R[p + 1], R[p + 2], c, f); bf.v(R[p + 3], R[p + 4], R[p + 5], c, f); bf.v(R[q + 3], R[q + 4], R[q + 5], c, f); bf.v(R[p], R[p + 1], R[p + 2], c, f); bf.v(R[q + 3], R[q + 4], R[q + 5], c, f); bf.v(R[q], R[q + 1], R[q + 2], c, f); }
+    else for (let i = 0; i < n; i++) { const p = i * 7, q = p + 7; bf.v(R[p], R[p + 1], R[p + 2], c, R[p + 6]); bf.v(R[p + 3], R[p + 4], R[p + 5], c, R[p + 6]); bf.v(R[q + 3], R[q + 4], R[q + 5], c, R[q + 6]); bf.v(R[p], R[p + 1], R[p + 2], c, R[p + 6]); bf.v(R[q + 3], R[q + 4], R[q + 5], c, R[q + 6]); bf.v(R[q], R[q + 1], R[q + 2], c, R[q + 6]); }
     for (const [on, e, r, sg, o] of [[capA, a, ra, -1, 0], [capB, b, rb, 1, 3]]) { if (!on) continue; const x = e[0] + sg * dx * r * 0.55, y = e[1] + sg * dy * r * 0.55, z = e[2] + sg * dz * r * 0.55; const X = A[0] * x + A[1] * y + A[2] * z + A[9], Y = A[3] * x + A[4] * y + A[5] * z + A[10], Z = A[6] * x + A[7] * y + A[8] * z + A[11]; const s0 = sh(sg * dx, sg * dy, sg * dz);
-      for (let i = 0; i < n; i++) { const p = i * 7 + o, q = p + 7; bf.v(R[p], R[p + 1], R[p + 2], c, R[i * 7 + 6]); bf.v(R[q], R[q + 1], R[q + 2], c, R[i * 7 + 13]); bf.v(X, Y, Z, c, s0); } }
+      for (let i = 0; i < n; i++) { const p = i * 7 + o, q = p + 7; if (LOWPOLY) { const f = (R[i * 7 + 6] + R[i * 7 + 13] + s0 * 2) / 4; bf.v(R[p], R[p + 1], R[p + 2], c, f); bf.v(R[q], R[q + 1], R[q + 2], c, f); bf.v(X, Y, Z, c, f); } else { bf.v(R[p], R[p + 1], R[p + 2], c, R[i * 7 + 6]); bf.v(R[q], R[q + 1], R[q + 2], c, R[i * 7 + 13]); bf.v(X, Y, Z, c, s0); } } }
   }
   /** Elipsoide (cabeza, manos, pelo, casco) centrado en ce (local), radios rx, ry, rz. */
   orb(A, ce, rx, ry, rz, color, n = 8, m = 5, lit = 0) { // Fase 56: lit > 0 → brillo propio (no le afecta la luz)
-    const c = col(color); if (!c) return; const bf = this.tri; bf.need(n * m * 6); const k = 1 / Math.hypot(A[0], A[3], A[6]); const R = LIMB_R; const W = (n + 1) * 4;
+    const c = col(color); if (!c) return; if (LOWPOLY && !lit) { n = Math.min(n, 8); m = Math.min(m, 4); } const bf = this.tri; bf.need(n * m * 6); const k = 1 / Math.hypot(A[0], A[3], A[6]); const R = LIMB_R; const W = (n + 1) * 4;
     for (let j = 0; j <= m; j++) { const ph = -Math.PI / 2 + Math.PI * j / m, cp = Math.cos(ph), sp = Math.sin(ph);
       for (let i = 0; i <= n; i++) { const t = i / n * Math.PI * 2; const nx = cp * Math.cos(t), ny = sp, nz = cp * Math.sin(t); const x = ce[0] + rx * nx, y = ce[1] + ry * ny, z = ce[2] + rz * nz; const o = j * W + i * 4;
         R[o] = A[0] * x + A[1] * y + A[2] * z + A[9]; R[o + 1] = A[3] * x + A[4] * y + A[5] * z + A[10]; R[o + 2] = A[6] * x + A[7] * y + A[8] * z + A[11];
-        R[o + 3] = lit || 0.74 + 0.32 * Math.max(-0.6, k * ((A[0] * nx + A[1] * ny + A[2] * nz) * LIGHT[0] + (A[3] * nx + A[4] * ny + A[5] * nz) * LIGHT[1] + (A[6] * nx + A[7] * ny + A[8] * nz) * LIGHT[2])); } }
+        R[o + 3] = lit || lpShade(k * ((A[0] * nx + A[1] * ny + A[2] * nz) * LIGHT[0] + (A[3] * nx + A[4] * ny + A[5] * nz) * LIGHT[1] + (A[6] * nx + A[7] * ny + A[8] * nz) * LIGHT[2])); } }
     for (let j = 0; j < m; j++) for (let i = 0; i < n; i++) { const p = j * W + i * 4, q = p + 4, r = p + W, t = r + 4;
+      if (LOWPOLY && !lit) { const f = (R[p + 3] + R[q + 3] + R[r + 3] + R[t + 3]) / 4; bf.v(R[p], R[p + 1], R[p + 2], c, f); bf.v(R[r], R[r + 1], R[r + 2], c, f); bf.v(R[t], R[t + 1], R[t + 2], c, f); bf.v(R[p], R[p + 1], R[p + 2], c, f); bf.v(R[t], R[t + 1], R[t + 2], c, f); bf.v(R[q], R[q + 1], R[q + 2], c, f); continue; }
       bf.v(R[p], R[p + 1], R[p + 2], c, R[p + 3]); bf.v(R[r], R[r + 1], R[r + 2], c, R[r + 3]); bf.v(R[t], R[t + 1], R[t + 2], c, R[t + 3]); bf.v(R[p], R[p + 1], R[p + 2], c, R[p + 3]); bf.v(R[t], R[t + 1], R[t + 2], c, R[t + 3]); bf.v(R[q], R[q + 1], R[q + 2], c, R[q + 3]); }
   }
   /** Caja orientada: esquinas locales transformadas por A (matriz afín 3×4), con sombreado por la luz. */
   obox(A, x0, y0, z0, x1, y1, z1, color) {
     const c = col(color); if (!c) return; const b = this.tri; b.need(36);
     const P = (x, y, z) => [A[0] * x + A[1] * y + A[2] * z + A[9], A[3] * x + A[4] * y + A[5] * z + A[10], A[6] * x + A[7] * y + A[8] * z + A[11]];
-    const N = (x, y, z) => 0.72 + 0.34 * Math.max(-0.6, (A[0] * x + A[1] * y + A[2] * z) * LIGHT[0] + (A[3] * x + A[4] * y + A[5] * z) * LIGHT[1] + (A[6] * x + A[7] * y + A[8] * z) * LIGHT[2]);
+    const N = (x, y, z) => lpShade((A[0] * x + A[1] * y + A[2] * z) * LIGHT[0] + (A[3] * x + A[4] * y + A[5] * z) * LIGHT[1] + (A[6] * x + A[7] * y + A[8] * z) * LIGHT[2]);
     const c8 = [P(x0, y0, z0), P(x1, y0, z0), P(x1, y1, z0), P(x0, y1, z0), P(x0, y0, z1), P(x1, y0, z1), P(x1, y1, z1), P(x0, y1, z1)];
     const F = [[[3, 2, 6, 7], N(0, 1, 0)], [[0, 1, 5, 4], N(0, -1, 0)], [[4, 5, 6, 7], N(0, 0, 1)], [[1, 0, 3, 2], N(0, 0, -1)], [[5, 1, 2, 6], N(1, 0, 0)], [[0, 4, 7, 3], N(-1, 0, 0)]];
     for (const [q, s] of F) for (const k of [0, 1, 2, 0, 2, 3]) { const p = c8[q[k]]; b.v(p[0], p[1], p[2], c, s); }
@@ -45487,7 +45504,10 @@ const AF = {
 // ───────── personas: figura articulada ─────────
 const LOOK3 = {
   // Fase 56 (estilo EG2, imagen de referencia): oliva, chaleco negro, casco, máscara de gas con ojos rojos luminosos
-  security: { top: '#cdd1d6', vest: '#2a2c30', legs: '#b9bdc4', cap: '#4a4e55', shoe: '#24262a', glove: '#2b2d31', chunky: 1.07 },
+  security: { top: '#c3c8ce', vest: '#2c2f34', legs: '#aab0b7', cap: '#4a4e55', brim: true, shoe: '#202226', glove: '#2b2d31', visor: '#f2c230', armor: true, pads: '#2f3136', pouch: '#3c3f45', chunky: 1.08, gun: '#3d4a55' },
+  // Fase 57: fuerza especial E-11 (agentes de Seguridad con la especialidad «Respuesta táctica»): armadura gris azulada,
+  // máscara con lentes octogonales cian luminosas, brazalete naranja y emblema en el casco
+  e11: { top: '#3e4a57', vest: '#64798c', legs: '#3a4552', cap: '#64798c', shoe: '#1e2329', glove: '#2a313a', mask: '#4f6070', filter: '#3a4552', eye: '#8ff0ff', eyeOct: true, pads: '#64798c', pouch: '#4c5d6d', band: '#e0703a', emblem: '#a9bccb', chunky: 1.16, gun: '#2a323c', armor: true },
   research: { top: '#eef0f2', legs: '#8d8997', shoe: '#4c4452' },
   medical: { top: '#4fb3a2', legs: '#4fb3a2', cap: '#3d988a', shoe: '#eef1f2' },
   containment: { top: '#e2b52c', legs: '#c99d1f', cap: '#e2b52c', hood: true, shoe: '#2b2b2b' },
@@ -45495,12 +45515,12 @@ const LOOK3 = {
   administration: { top: '#3b4250', legs: '#2c313b', shoe: '#1c1f24' },
   dclass: { top: '#e0782c', legs: '#e0782c', shoe: '#2b2b2e' },
   // Fase 56 (estilo EG2, imagen de referencia): oliva, chaleco negro, casco, máscara de gas con ojos rojos luminosos
-  chaos: { top: '#5b5830', vest: '#202125', legs: '#56532e', cap: '#2d2e32', shoe: '#1b1b1e', glove: '#1f2023', mask: '#2e2f33', filter: '#3b3c41', eye: '#ff2a1c', pads: '#1c1d20', pouch: '#2c2d32', chunky: 1.13, gun: '#1e1f22' },
+  chaos: { top: '#5b5830', vest: '#202125', legs: '#56532e', cap: '#2d2e32', shoe: '#1b1b1e', glove: '#1f2023', mask: '#2e2f33', filter: '#3b3c41', eye: '#ff2a1c', pads: '#1c1d20', pouch: '#2c2d32', chunky: 1.13, gun: '#1e1f22', armor: true },
 };
 const M2C = 0.612; // metros → casillas
 /** Dibuja una persona en (u, v) a la altura y (en casillas), mirando hacia ang. frame: el mismo nombre de pose que los sprites. */
 function figure(geo, u, v, y, ang, dept, frame, skinI, hairI, flags, varI, now) {
-  const L = LOOK3[dept] ?? LOOK3.administration; const skin = SKIN_TONES[skinI % SKIN_TONES.length] ?? '#e0ac85'; const hair = HAIR_COLORS[hairI % HAIR_COLORS.length] ?? '#2b1d14';
+  const L = (dept === 'security' && flags.includes('t') ? LOOK3.e11 : LOOK3[dept]) ?? LOOK3.administration; const skin = SKIN_TONES[skinI % SKIN_TONES.length] ?? '#e0ac85'; const hair = HAIR_COLORS[hairI % HAIR_COLORS.length] ?? '#2b1d14';
   const f0 = frame[0]; const k = Number(frame[frame.length - 1]) || 0; const ph = (varI || 0) * 1.7;
   const walk = /^[wrlx][0-3]$/.test(frame); const t = now / 1000;
   let legA = 0, legB = 0, armA = 0, armB = 0, drop = 0, lean = 0, lie = 0, sit = false, gun = false, flash = false, thigh = 0;
@@ -45520,6 +45540,7 @@ function figure(geo, u, v, y, ang, dept, frame, skinI, hairI, flags, varI, now) 
   let A = AF.mul(AF.t(u, y, v), AF.ry(ang));
   if (lie) { const lift = f0 === 'b' ? 0.36 : f0 === 'z' ? 0.3 : 0.07; A = AF.mul(A, AF.mul(AF.t(0, lift * M2C * Math.min(1, lie / 1.2) + 0.02, 0), AF.rx(-lie))); }
   A = AF.mul(A, AF.s(M2C));
+  A = AF.mul(A, [1.18, 0, 0, 0, 0.96, 0, 0, 0, 1.14, 0, 0, 0]); // Fase 57: proporciones robustas y algo caricaturescas (low poly)
   const breathe = lie ? 0 : Math.sin(t * 2.2 + ph) * 0.006;
   const hipY = 0.86 - drop, shY = 1.4 - drop + breathe;
   const B = lean ? AF.mul(AF.mul(AF.t(0, hipY, 0), AF.rx(lean)), AF.t(0, -hipY, 0)) : null; const U = B ? AF.mul(A, B) : A; // tronco inclinado
@@ -45535,13 +45556,13 @@ function figure(geo, u, v, y, ang, dept, frame, skinI, hairI, flags, varI, now) 
     geo.limb(A, hip, kn, 0.088 * bw, 0.066 * ck, L.legs, 1, 7, true, true);
     geo.limb(A, kn, an, 0.064 * ck, 0.047 * ck, L.legs, 1, 7, false, false);
     const up = an[1] > 0.1 ? Math.min(0.08, (an[1] - 0.07) * 0.5) : 0; // pie levantado al andar: la punta cae
-    if (L.mask) { // Fase 56: bota alta, rodillera y bolsillo de muslo
+    if (L.armor) { // Fase 56: bota alta, rodillera y bolsillo de muslo
       const kd = [an[0] - kn[0], an[1] - kn[1], an[2] - kn[2]];
       geo.limb(A, an, [an[0] + kd[0] * -0.42, an[1] + kd[1] * -0.42, an[2] + kd[2] * -0.42], 0.062, 0.066, L.shoe, 1, 7, false, true);
       const nk = [kn[0], kn[1] + 0.01, kn[2] + 0.05]; geo.orb(A, nk, 0.07, 0.072, 0.048, L.pads, 7, 4);
       const th = [(hip[0] + kn[0]) / 2 + sd * 0.07, (hip[1] + kn[1]) / 2, (hip[2] + kn[2]) / 2]; geo.orb(A, th, 0.045, 0.07, 0.06, L.pouch, 6, 4);
     }
-    const fz = L.mask ? 1.22 : 1;
+    const fz = L.armor ? 1.22 : 1;
     geo.limb(A, [an[0], an[1] - 0.02, an[2] - 0.05], [an[0] + sd * 0.012, an[1] - 0.035 - up, an[2] + 0.16 * fz], 0.052 * fz, 0.044 * fz, L.shoe, 0.8, 6, true, true);
   }
   // tronco: cadera, cintura, pecho y hombros
@@ -45550,13 +45571,15 @@ function figure(geo, u, v, y, ang, dept, frame, skinI, hairI, flags, varI, now) 
   geo.limb(U, [0, wY - 0.03, 0], [0, cY, 0.005], 0.152 * bw, SH + 0.012, L.top, 0.62, 9, false, false);
   geo.limb(U, [0, cY, 0.005], [0, shY + 0.055, 0], SH + 0.012, 0.075, L.top, 0.62, 9, false, false);
   if (L.vest) { geo.limb(U, [0, wY + 0.02, 0], [0, cY - 0.01, 0.005], 0.165 * bw, SH + 0.03, L.vest, 0.68, 9, false, false); geo.limb(U, [0, cY - 0.01, 0.005], [0, shY + 0.03, 0], SH + 0.03, 0.1, L.vest, 0.68, 9, false, false); }
-  if (L.mask) { // Fase 56: bolsillos del portaplacas, cinturón con hebilla y hombreras
+  if (L.armor) { // Fase 56/57: placa pectoral, bolsillos, cinturón con hebilla y hombreras de placa
     const fz = (0.165 * bw) * 0.68;
+    geo.obox(U, -0.15 * bw, wY + 0.12, fz - 0.03, 0.15 * bw, shY - 0.02, fz + 0.045, L.vest);            // placa pectoral
+    geo.obox(U, -0.13 * bw, shY - 0.05, -0.02, 0.13 * bw, shY + 0.06, fz + 0.02, L.vest);                // cuello alto
+    for (const sd of [-1, 1]) geo.obox(U, sd > 0 ? SH - 0.02 : -SH - 0.09, shY - 0.07, -0.09, sd > 0 ? SH + 0.09 : -SH + 0.02, shY + 0.035, 0.09, L.pads); // hombreras
     for (const x of [-0.105, 0, 0.105]) geo.obox(U, x * bw - 0.045, wY + 0.03, fz - 0.025, x * bw + 0.045, wY + 0.15, fz + 0.035, L.pouch);
     geo.obox(U, -0.12 * bw, cY - 0.05, fz - 0.005, 0.12 * bw, cY - 0.015, fz + 0.03, L.pouch);
     geo.limb(U, [0, hipY - 0.01, 0], [0, hipY + 0.05, 0], 0.172 * bw, 0.168 * bw, '#141417', 0.7, 9, false, false);
     geo.obox(U, -0.03, hipY - 0.005, 0.172 * bw * 0.7 - 0.01, 0.03, hipY + 0.045, 0.172 * bw * 0.7 + 0.012, '#5b5b60');
-    for (const sd of [-1, 1]) geo.orb(U, [sd * (SH + 0.02), shY + 0.01, 0], 0.075, 0.05, 0.08, L.vest, 7, 4);
   }
   if (dept === 'research') geo.limb(U, [0, wY, 0], [0, hipY - 0.3, 0], 0.158 * bw, 0.19 * bw, L.top, 0.72, 9, false, false); // bata
   // brazos: hombro, codo, antebrazo y mano
@@ -45568,7 +45591,7 @@ function figure(geo, u, v, y, ang, dept, frame, skinI, hairI, flags, varI, now) 
     geo.limb(U, sh, el, 0.062 * ck * ck, 0.05 * ck * ck, L.top, 1, 7, true, true);
     if (L.band && sd < 0) geo.limb(U, [sh[0] + (el[0] - sh[0]) * 0.35, sh[1] + (el[1] - sh[1]) * 0.35, sh[2] + (el[2] - sh[2]) * 0.35], [sh[0] + (el[0] - sh[0]) * 0.6, sh[1] + (el[1] - sh[1]) * 0.6, sh[2] + (el[2] - sh[2]) * 0.6], 0.06 * ck, 0.056 * ck, L.band, 1, 7, false, false);
     geo.limb(U, el, wr, 0.048 * ck * ck, 0.04 * ck * ck, dept === 'medical' || dept === 'dclass' ? skin : L.top, 1, 7, false, false);
-    const gk = L.mask ? 1.2 : 1;
+    const gk = L.armor ? 1.2 : 1;
     geo.orb(U, [wr[0], wr[1] - 0.035 * Math.cos(fa), wr[2] + 0.035 * Math.sin(fa)], 0.04 * gk, 0.052 * gk, 0.045 * gk, glove, 6, 4);
   }
   // cuello y cabeza
@@ -45578,20 +45601,22 @@ function figure(geo, u, v, y, ang, dept, frame, skinI, hairI, flags, varI, now) 
   else if (L.mask) { // Fase 56: máscara de gas, ojos luminosos, filtro y casco con borde (imagen de referencia)
     geo.orb(U, [0, hc - 0.005, 0.005], 0.108, 0.135, 0.118, L.mask, 9, 6);
     for (const ex of [-0.045, 0.045]) {
+      if (L.eyeOct) { geo.orb(U, [ex, hc + 0.012, 0.1], 0.05, 0.046, 0.02, '#1a2027', 8, 2); geo.orb(U, [ex, hc + 0.012, 0.11], 0.04, 0.036, 0.016, L.eye, 8, 2, 1.45); continue; } // octógonos luminosos
       geo.orb(U, [ex, hc + 0.012, 0.098], 0.047, 0.047, 0.024, '#111113', 8, 4);
       geo.orb(U, [ex, hc + 0.012, 0.11], 0.039, 0.039, 0.02, L.eye, 8, 4, 1.4);
       geo.orb(U, [ex - 0.012, hc + 0.024, 0.126], 0.011, 0.011, 0.005, '#fff2ea', 4, 3, 1.3);
     }
+    if (L.emblem) geo.obox(U, -0.03, hc + 0.075, 0.112, 0.03, hc + 0.115, 0.135, L.emblem);
     geo.limb(U, [0.012, hc - 0.05, 0.1], [0.022, hc - 0.095, 0.17], 0.045, 0.042, L.filter, 1, 8, false, true);
     geo.orb(U, [0.022, hc - 0.095, 0.172], 0.03, 0.03, 0.012, '#18181a', 6, 3);
     geo.limb(U, [0, hc + 0.035, -0.005], [0, hc + 0.13, -0.01], 0.13, 0.112, L.cap, 1.1, 10, false, true);
     geo.limb(U, [0, hc + 0.025, -0.005], [0, hc + 0.045, -0.005], 0.142, 0.14, L.cap, 1.08, 10, true, false);
   }
   else {
-    const face = L.visor ? L.cap : skin; // pasamontañas
+    const face = skin; // Fase 57: cara visible, con visor sobre los ojos
     geo.orb(U, [0, hc, 0], 0.104, 0.135, 0.114, face, 9, 6);
     geo.orb(U, [-0.104, hc - 0.005, 0], 0.016, 0.03, 0.02, face, 5, 3); geo.orb(U, [0.104, hc - 0.005, 0], 0.016, 0.03, 0.02, face, 5, 3); // orejas
-    if (L.visor) geo.obox(U, -0.085, hc - 0.005, 0.1, 0.085, hc + 0.04, 0.122, L.visor);
+    if (L.visor) { geo.obox(U, -0.09, hc - 0.002, 0.098, 0.09, hc + 0.042, 0.124, L.visor); geo.obox(U, -0.07, hc + 0.03, 0.12, 0.0, hc + 0.036, 0.127, '#fff1b0'); geo.obox(U, -0.024, hc - 0.07, 0.092, 0.024, hc - 0.061, 0.106, '#8a4a44'); }
     else { // ojos, cejas, nariz y boca
       for (const ex of [-0.04, 0.04]) { geo.obox(U, ex - 0.013, hc + 0.004, 0.103, ex + 0.013, hc + 0.026, 0.113, '#f4f1ea'); geo.obox(U, ex - 0.007, hc + 0.006, 0.108, ex + 0.007, hc + 0.024, 0.116, '#1d1a18'); geo.obox(U, ex - 0.02, hc + 0.036, 0.1, ex + 0.02, hc + 0.045, 0.114, hair); }
       geo.limb(U, [0, hc + 0.012, 0.108], [0, hc - 0.03, 0.128], 0.008, 0.016, skin, 1, 4, false, true);
