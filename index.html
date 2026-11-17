@@ -25933,7 +25933,7 @@ const Iso = {
 return { Iso };
 })();
 __mod["src/ui/gfx/sprites.js"] = (() => {
-const { SPRITE_SCALES } = __mod["src/ui/gfx/config.js"];
+const { SPRITE_SCALES, CAPBOX } = __mod["src/ui/gfx/config.js"];
 
 class SpriteCache {
   static MAX_PIXELS = 16e6;     // ≈ 64 MB de memoria de lienzos como máximo
@@ -25994,6 +25994,10 @@ class SpriteCache {
   has(id) { return this.manifest.has(id); }
 
   get(id, params = '') {
+    if (CAPBOX.cap && id === 'person') { // Fase 58: en 3D la persona es un modelo: basta con un marcador ligero con sus datos
+      const def = this.manifest.get(id); const m = { id, params, w: def.w, h: def.h, ax: def.ax, ay: def.ay };
+      return { canvas: { __spr: m, width: 1, height: 1 }, w: def.w, h: def.h, ax: def.ax, ay: def.ay, px: 0, used: this.frame };
+    }
     const key = id + '|' + params;
     let spr = this.cache.get(key);
     if (spr) { this.stats.hits++; spr.used = this.frame; return spr; }
@@ -30760,7 +30764,7 @@ class Renderer {
       out.push({
         type: 'person', e, x: pos.x, y: pos.y - (onStretcher.has(e.id) ? 4 : 0),
         key,
-        sprite: 'person', params: `${e.department}|${face.back ? 'b' : 'f'}|${frame}|${h % 5}|${(h >> 3) % 6}|${flags}|${(h >> 6) % 3}`,
+        sprite: 'person', params: `${e.department}|${face.back ? 'b' : 'f'}|${frame}|${h % 5}|${(h >> 3) % 6}|${flags}|${(h >> 6) % 3}|${(h >>> 9) % 1000}`, // Fase 58: semilla de rasgos
         flip: face.flip, badge,
       });
     }
@@ -42235,8 +42239,8 @@ class GLFX {
       s.value = String(this.prefs[key]); s.addEventListener('change', () => { this.setPref(key, key === 'camera' ? s.value === 'true' : s.value); this._status(); });
       return s;
     };
-    { // Fase 55: vista 3D o 2D
-      const row = el('label', 'snd-row snd-vm', box); el('span', '', row, 'Vista'); const s3 = el('select', '', row); s3.dataset.v3 = '1';
+    { // Fase 55: vista 3D o 2D (Fase 58: fila oculta, el juego es solo 3D)
+      const row = el('label', 'snd-row snd-vm', box); row.hidden = true; el('span', '', row, 'Vista'); const s3 = el('select', '', row); s3.dataset.v3 = '1';
       for (const [k, l] of [['1', '3D (cámara libre)'], ['0', '2D (isométrica clásica)']]) { const o = el('option', '', s3, l); o.value = k; }
       const v3 = this.renderer.v3; s3.value = v3?.on ? '1' : '0'; s3.disabled = !v3?.ok; s3.addEventListener('change', () => { v3?.setOn(s3.value === '1'); this._status(); }); this._s3 = s3;
       // Fase 55B: motor de la vista 3D (Three.js descargado de internet, o el propio que va dentro del archivo)
@@ -45377,7 +45381,7 @@ __mod["src/ui/view3d.js"] = (() => {
 // Nada de esto toca la simulación ni se guarda en la partida: es solo otra forma de dibujar. La preferencia 2D/3D es del dispositivo.
 const { WORLD, CAPBOX } = __mod["src/ui/gfx/config.js"];
 const { Iso } = __mod["src/ui/iso.js"];
-const { shade } = __mod["src/ui/gfx/color.js"];
+const { shade, mix } = __mod["src/ui/gfx/color.js"];
 const { SKIN_TONES, HAIR_COLORS } = __mod["src/data/visuals.js"];
 const { MANIFEST } = __mod["src/ui/gfx/manifest.js"];
 
@@ -45415,11 +45419,23 @@ class Buf {
 const LIGHT = (() => { const l = [0.42, 0.8, 0.43]; const k = Math.hypot(...l); return l.map((x) => x / k); })();
 const LIMB_R = new Float32Array(1024); // memoria de trabajo de limb/orb
 // Fase 57 (estilo low poly 3D): miembros y esferas con pocas caras y un tono por cara (facetado), luz más contrastada
-const LOWPOLY = true; const LP_A = 0.64, LP_B = 0.44;
+const LOWPOLY = false; const LP_A = 0.64, LP_B = 0.44; // Fase 58: personas suaves (estilo «Stylized 3D Clean»)
+// Fase 58: materiales para las personas: ambiente, difusa, especular (con exponente) y luz de contorno
+const VDIR = (() => { const v = [0.574, 0.581, 0.574]; const k = Math.hypot(...v); return v.map((x) => x / k); })();
+const HDIR = (() => { const v = [LIGHT[0] + VDIR[0], LIGHT[1] + VDIR[1], LIGHT[2] + VDIR[2]]; const k = Math.hypot(...v); return v.map((x) => x / k); })();
+const MAT = {
+  cloth: { a: 0.6, d: 0.42, s: 0.05, p: 8, r: 0.12 }, skin: { a: 0.67, d: 0.35, s: 0.1, p: 14, r: 0.15 },
+  metal: { a: 0.46, d: 0.44, s: 0.6, p: 28, r: 0.14 }, plastic: { a: 0.57, d: 0.4, s: 0.32, p: 20, r: 0.1 },
+  leather: { a: 0.52, d: 0.42, s: 0.2, p: 14, r: 0.08 }, rubber: { a: 0.54, d: 0.4, s: 0.14, p: 10, r: 0.08 }, hair: { a: 0.6, d: 0.38, s: 0.18, p: 10, r: 0.14 },
+};
+function shadeW(m, x, y, z) {
+  const d = x * LIGHT[0] + y * LIGHT[1] + z * LIGHT[2]; const h = Math.max(0, x * HDIR[0] + y * HDIR[1] + z * HDIR[2]); const vv = Math.max(0, x * VDIR[0] + y * VDIR[1] + z * VDIR[2]);
+  return m.a + m.d * Math.max(-0.6, d) + m.s * Math.pow(h, m.p) + m.r * Math.pow(1 - vv, 3);
+}
 const lpShade = (d) => (LOWPOLY ? LP_A + LP_B * Math.max(-0.6, d) : 0.74 + 0.32 * Math.max(-0.6, d));
 class Geo {
-  constructor() { this.tri = new Buf(); this.tra = new Buf(256); this.lin = new Buf(512); this.ox = 0; this.oz = 0; this.oy = 0; this.bills = []; }
-  reset() { this.tri.reset(); this.tra.reset(); this.lin.reset(); this.bills.length = 0; this.ox = this.oz = this.oy = 0; }
+  constructor() { this.tri = new Buf(); this.tra = new Buf(256); this.lin = new Buf(512); this.ox = 0; this.oz = 0; this.oy = 0; this.bills = []; this.M = null; }
+  reset() { this.tri.reset(); this.tra.reset(); this.lin.reset(); this.bills.length = 0; this.ox = this.oz = this.oy = 0; this.M = null; }
   _t(c) { return c[3] < 0.985 ? this.tra : this.tri; }
   /** Polígono con puntos {u, v, z} (z en px de dibujo). */
   poly(pts, color, al = 1) {
@@ -45454,13 +45470,13 @@ class Geo {
   /** Miembro: tronco de cono de sección ovalada entre dos puntos locales a → b (radios ra, rb; fl = fondo/ancho), con
    * extremos redondeados opcionales. Sombreado suave por vértice. */
   limb(A, a, b, ra, rb, color, fl = 1, n = 7, capA = true, capB = true) {
-    const c = col(color); if (!c) return; if (LOWPOLY) n = Math.min(n, n >= 9 ? 8 : 6); const bf = this.tri; bf.need(n * 6 + (capA ? n * 3 : 0) + (capB ? n * 3 : 0));
+    const c = col(color); if (!c) return; if (LOWPOLY) n = Math.min(n, n >= 9 ? 8 : 6); else if (this.M) n = Math.min(n, FIG_D === 2 ? 9 : FIG_D ? 7 : 6); /* Fase 58: menos caras de lejos */ const bf = this.tri; bf.need(n * 6 + (capA ? n * 3 : 0) + (capB ? n * 3 : 0));
     let dx = b[0] - a[0], dy = b[1] - a[1], dz = b[2] - a[2]; const L = Math.hypot(dx, dy, dz) || 1e-6; dx /= L; dy /= L; dz /= L;
     let sx = 1, sy = 0, sz = 0; if (Math.abs(dx) > 0.9) { sx = 0; sz = 1; }
     const d = sx * dx + sy * dy + sz * dz; sx -= d * dx; sy -= d * dy; sz -= d * dz; const sl = Math.hypot(sx, sy, sz); sx /= sl; sy /= sl; sz /= sl;
     const fx = dy * sz - dz * sy, fy = dz * sx - dx * sz, fz = dx * sy - dy * sx;
     const k = 1 / Math.hypot(A[0], A[3], A[6]); const R = LIMB_R;
-    const sh = (x, y, z) => lpShade(k * ((A[0] * x + A[1] * y + A[2] * z) * LIGHT[0] + (A[3] * x + A[4] * y + A[5] * z) * LIGHT[1] + (A[6] * x + A[7] * y + A[8] * z) * LIGHT[2]));
+    const Mt = this.M; const sh = (x, y, z) => { const wx = k * (A[0] * x + A[1] * y + A[2] * z), wy = k * (A[3] * x + A[4] * y + A[5] * z), wz = k * (A[6] * x + A[7] * y + A[8] * z); return Mt ? shadeW(Mt, wx, wy, wz) : lpShade(wx * LIGHT[0] + wy * LIGHT[1] + wz * LIGHT[2]); };
     for (let i = 0; i <= n; i++) { const t = i / n * Math.PI * 2, cs = Math.cos(t), sn = Math.sin(t); const nx = cs * sx + sn * fx, ny = cs * sy + sn * fy, nz = cs * sz + sn * fz; const ox = cs * sx + sn * fl * fx, oy = cs * sy + sn * fl * fy, oz = cs * sz + sn * fl * fz;
       const j = i * 7; const xa = a[0] + ra * ox, ya = a[1] + ra * oy, za = a[2] + ra * oz, xb = b[0] + rb * ox, yb = b[1] + rb * oy, zb = b[2] + rb * oz;
       R[j] = A[0] * xa + A[1] * ya + A[2] * za + A[9]; R[j + 1] = A[3] * xa + A[4] * ya + A[5] * za + A[10]; R[j + 2] = A[6] * xa + A[7] * ya + A[8] * za + A[11];
@@ -45472,11 +45488,11 @@ class Geo {
   }
   /** Elipsoide (cabeza, manos, pelo, casco) centrado en ce (local), radios rx, ry, rz. */
   orb(A, ce, rx, ry, rz, color, n = 8, m = 5, lit = 0) { // Fase 56: lit > 0 → brillo propio (no le afecta la luz)
-    const c = col(color); if (!c) return; if (LOWPOLY && !lit) { n = Math.min(n, 8); m = Math.min(m, 4); } const bf = this.tri; bf.need(n * m * 6); const k = 1 / Math.hypot(A[0], A[3], A[6]); const R = LIMB_R; const W = (n + 1) * 4;
+    const c = col(color); if (!c) return; if (LOWPOLY && !lit) { n = Math.min(n, 8); m = Math.min(m, 4); } else if (this.M) { n = Math.min(n, FIG_D === 2 ? 12 : FIG_D ? 9 : 7); m = Math.min(m, FIG_D === 2 ? 7 : FIG_D ? 5 : 4); } const bf = this.tri; bf.need(n * m * 6); const k = 1 / Math.hypot(A[0], A[3], A[6]); const R = LIMB_R; const W = (n + 1) * 4;
     for (let j = 0; j <= m; j++) { const ph = -Math.PI / 2 + Math.PI * j / m, cp = Math.cos(ph), sp = Math.sin(ph);
       for (let i = 0; i <= n; i++) { const t = i / n * Math.PI * 2; const nx = cp * Math.cos(t), ny = sp, nz = cp * Math.sin(t); const x = ce[0] + rx * nx, y = ce[1] + ry * ny, z = ce[2] + rz * nz; const o = j * W + i * 4;
         R[o] = A[0] * x + A[1] * y + A[2] * z + A[9]; R[o + 1] = A[3] * x + A[4] * y + A[5] * z + A[10]; R[o + 2] = A[6] * x + A[7] * y + A[8] * z + A[11];
-        R[o + 3] = lit || lpShade(k * ((A[0] * nx + A[1] * ny + A[2] * nz) * LIGHT[0] + (A[3] * nx + A[4] * ny + A[5] * nz) * LIGHT[1] + (A[6] * nx + A[7] * ny + A[8] * nz) * LIGHT[2])); } }
+        if (lit) R[o + 3] = lit; else { const wx = k * (A[0] * nx + A[1] * ny + A[2] * nz), wy = k * (A[3] * nx + A[4] * ny + A[5] * nz), wz = k * (A[6] * nx + A[7] * ny + A[8] * nz); R[o + 3] = this.M ? shadeW(this.M, wx, wy, wz) : lpShade(wx * LIGHT[0] + wy * LIGHT[1] + wz * LIGHT[2]); } } }
     for (let j = 0; j < m; j++) for (let i = 0; i < n; i++) { const p = j * W + i * 4, q = p + 4, r = p + W, t = r + 4;
       if (LOWPOLY && !lit) { const f = (R[p + 3] + R[q + 3] + R[r + 3] + R[t + 3]) / 4; bf.v(R[p], R[p + 1], R[p + 2], c, f); bf.v(R[r], R[r + 1], R[r + 2], c, f); bf.v(R[t], R[t + 1], R[t + 2], c, f); bf.v(R[p], R[p + 1], R[p + 2], c, f); bf.v(R[t], R[t + 1], R[t + 2], c, f); bf.v(R[q], R[q + 1], R[q + 2], c, f); continue; }
       bf.v(R[p], R[p + 1], R[p + 2], c, R[p + 3]); bf.v(R[r], R[r + 1], R[r + 2], c, R[r + 3]); bf.v(R[t], R[t + 1], R[t + 2], c, R[t + 3]); bf.v(R[p], R[p + 1], R[p + 2], c, R[p + 3]); bf.v(R[t], R[t + 1], R[t + 2], c, R[t + 3]); bf.v(R[q], R[q + 1], R[q + 2], c, R[q + 3]); }
@@ -45485,7 +45501,7 @@ class Geo {
   obox(A, x0, y0, z0, x1, y1, z1, color) {
     const c = col(color); if (!c) return; const b = this.tri; b.need(36);
     const P = (x, y, z) => [A[0] * x + A[1] * y + A[2] * z + A[9], A[3] * x + A[4] * y + A[5] * z + A[10], A[6] * x + A[7] * y + A[8] * z + A[11]];
-    const N = (x, y, z) => lpShade((A[0] * x + A[1] * y + A[2] * z) * LIGHT[0] + (A[3] * x + A[4] * y + A[5] * z) * LIGHT[1] + (A[6] * x + A[7] * y + A[8] * z) * LIGHT[2]);
+    const kk = 1 / (Math.hypot(A[0], A[3], A[6]) || 1); const Mt = this.M; const N = (x, y, z) => { const wx = kk * (A[0] * x + A[1] * y + A[2] * z), wy = kk * (A[3] * x + A[4] * y + A[5] * z), wz = kk * (A[6] * x + A[7] * y + A[8] * z); return Mt ? shadeW(Mt, wx, wy, wz) : lpShade((A[0] * x + A[1] * y + A[2] * z) * LIGHT[0] + (A[3] * x + A[4] * y + A[5] * z) * LIGHT[1] + (A[6] * x + A[7] * y + A[8] * z) * LIGHT[2]); };
     const c8 = [P(x0, y0, z0), P(x1, y0, z0), P(x1, y1, z0), P(x0, y1, z0), P(x0, y0, z1), P(x1, y0, z1), P(x1, y1, z1), P(x0, y1, z1)];
     const F = [[[3, 2, 6, 7], N(0, 1, 0)], [[0, 1, 5, 4], N(0, -1, 0)], [[4, 5, 6, 7], N(0, 0, 1)], [[1, 0, 3, 2], N(0, 0, -1)], [[5, 1, 2, 6], N(1, 0, 0)], [[0, 4, 7, 3], N(-1, 0, 0)]];
     for (const [q, s] of F) for (const k of [0, 1, 2, 0, 2, 3]) { const p = c8[q[k]]; b.v(p[0], p[1], p[2], c, s); }
@@ -45502,29 +45518,38 @@ const AF = {
 };
 
 // ───────── personas: figura articulada ─────────
-const LOOK3 = {
-  // Fase 56 (estilo EG2, imagen de referencia): oliva, chaleco negro, casco, máscara de gas con ojos rojos luminosos
-  security: { top: '#c3c8ce', vest: '#2c2f34', legs: '#aab0b7', cap: '#4a4e55', brim: true, shoe: '#202226', glove: '#2b2d31', visor: '#f2c230', armor: true, pads: '#2f3136', pouch: '#3c3f45', chunky: 1.08, gun: '#3d4a55' },
-  // Fase 57: fuerza especial E-11 (agentes de Seguridad con la especialidad «Respuesta táctica»): armadura gris azulada,
-  // máscara con lentes octogonales cian luminosas, brazalete naranja y emblema en el casco
-  e11: { top: '#3e4a57', vest: '#64798c', legs: '#3a4552', cap: '#64798c', shoe: '#1e2329', glove: '#2a313a', mask: '#4f6070', filter: '#3a4552', eye: '#8ff0ff', eyeOct: true, pads: '#64798c', pouch: '#4c5d6d', band: '#e0703a', emblem: '#a9bccb', chunky: 1.16, gun: '#2a323c', armor: true },
-  research: { top: '#eef0f2', legs: '#8d8997', shoe: '#4c4452' },
-  medical: { top: '#4fb3a2', legs: '#4fb3a2', cap: '#3d988a', shoe: '#eef1f2' },
-  containment: { top: '#e2b52c', legs: '#c99d1f', cap: '#e2b52c', hood: true, shoe: '#2b2b2b' },
-  engineering: { top: '#3a4a5c', vest: '#d9782d', legs: '#3a4a5c', cap: '#f2d23c', brim: true, shoe: '#3b2f25' },
-  administration: { top: '#3b4250', legs: '#2c313b', shoe: '#1c1f24' },
-  dclass: { top: '#e0782c', legs: '#e0782c', shoe: '#2b2b2e' },
-  // Fase 56 (estilo EG2, imagen de referencia): oliva, chaleco negro, casco, máscara de gas con ojos rojos luminosos
-  chaos: { top: '#5b5830', vest: '#202125', legs: '#56532e', cap: '#2d2e32', shoe: '#1b1b1e', glove: '#1f2023', mask: '#2e2f33', filter: '#3b3c41', eye: '#ff2a1c', pads: '#1c1d20', pouch: '#2c2d32', chunky: 1.13, gun: '#1e1f22', armor: true },
-};
 const M2C = 0.612; // metros → casillas
-/** Dibuja una persona en (u, v) a la altura y (en casillas), mirando hacia ang. frame: el mismo nombre de pose que los sprites. */
-function figure(geo, u, v, y, ang, dept, frame, skinI, hairI, flags, varI, now) {
-  const L = (dept === 'security' && flags.includes('t') ? LOOK3.e11 : LOOK3[dept]) ?? LOOK3.administration; const skin = SKIN_TONES[skinI % SKIN_TONES.length] ?? '#e0ac85'; const hair = HAIR_COLORS[hairI % HAIR_COLORS.length] ?? '#2b1d14';
-  const f0 = frame[0]; const k = Number(frame[frame.length - 1]) || 0; const ph = (varI || 0) * 1.7;
+// ───────── Fase 58: personas «Stylized 3D Clean» (estilo EG2) ─────────
+// Superficies suaves con materiales (tela, piel, metal, plástico, cuero, pelo), rostros con ojos (blanco, iris, pupila,
+// brillo), párpados con parpadeo, cejas y boca expresivas, nariz, orejas, pómulos y mandíbula; variación por persona
+// (semilla): edad, pelo, barba, gafas, color de ojos y rasgos. Animación: giro de tronco y cadera, cabeza que mira,
+// cambio de peso, respiración y expresiones según el estado (miedo, enfado, concentración, sueño).
+let FIG_D = 2; // nivel de detalle (lo fija la vista 3D según el zoom): 0 lejos · 1 medio · 2 cerca
+const LOOK4 = {
+  security: { top: '#c3c8ce', legs: '#aab0b7', vest: '#2c2f34', pouch: '#3c3f45', pads: '#2f3136', shoe: '#202226', glove: '#2b2d31', helmet: '#4a4e55', visor: '#f2c230', armor: true, gun: '#3d4a55', belt: '#1c1d20', ck: 1.07, badge: '#d0504a' },
+  e11: { top: '#3e4a57', legs: '#3a4552', vest: '#64798c', pouch: '#4c5d6d', pads: '#64798c', shoe: '#1e2329', glove: '#2a313a', helmet: '#64798c', mask: '#4f6070', filter: '#3a4552', eye: '#8ff0ff', eyeOct: true, band: '#e0703a', emblem: '#a9bccb', armor: true, gun: '#2a323c', belt: '#1c2128', ck: 1.14 },
+  chaos: { top: '#5b5830', legs: '#56532e', vest: '#202125', pouch: '#2c2d32', pads: '#1c1d20', shoe: '#1b1b1e', glove: '#1f2023', helmet: '#2d2e32', mask: '#2e2f33', filter: '#3b3c41', eye: '#ff2a1c', armor: true, gun: '#1e1f22', belt: '#141416', ck: 1.12 },
+  research: { top: '#f1f3f5', coat: true, shirt: '#8ea7da', tie: '#3d5a8a', legs: '#6f6b7a', shoe: '#3c3542', badge: '#33bccf', ck: 1 },
+  medical: { top: '#4fb3a2', legs: '#4fb3a2', scrub: true, cap: '#3fa292', shoe: '#eef1f2', steth: '#2d3338', badge: '#3fbfa3', shortSleeve: true, ck: 1 },
+  administration: { top: '#3f4f5b', legs: '#36444e', suit: true, shirt: '#f2f4f5', tie: '#3d8ca2', shoe: '#1d2024', badge: '#e9edf0', ck: 1 },
+  engineering: { top: '#3e5468', legs: '#3e5468', hivis: '#f0873a', strip: '#e9edf0', hat: '#f2c443', shoe: '#4a3628', glove: '#c99f6a', toolbelt: '#6a4a2e', ck: 1.05 },
+  containment: { top: '#e2b52c', legs: '#d2a524', hood: true, visorC: '#1f2a34', shoe: '#2b2b2b', glove: '#2b2b2b', tank: '#8f989f', ck: 1.12 },
+  dclass: { top: '#e0782c', legs: '#e0782c', shoe: '#2b2b2e', shortSleeve: true, patch: true, ck: 1 },
+};
+const EYE_COLS = ['#5a3a22', '#3d6fa8', '#4f7d4a', '#7a5a2e', '#2f2219', '#6b8a9e'];
+function figure(geo, u, v, y, ang, dept, frame, skinI, hairI, flags, varI, now, seed0 = 0) {
+  const L = (dept === 'security' && flags.includes('t') ? LOOK4.e11 : LOOK4[dept]) ?? LOOK4.administration;
+  const seed = (seed0 || (skinI * 131 + hairI * 17 + (varI || 0) * 7 + dept.length * 3)) >>> 0;
+  const skin0 = SKIN_TONES[((skinI % SKIN_TONES.length) + SKIN_TONES.length) % SKIN_TONES.length] ?? '#e0ac85';
+  const sick = flags.includes('i') || flags.includes('d');
+  const skin = sick ? mix(skin0, '#a9c48a', 0.45) : skin0;
+  const age = seed % 7;                                           // 0-4 joven/adulto · 5-6 mayor
+  const hair0 = HAIR_COLORS[((hairI % HAIR_COLORS.length) + HAIR_COLORS.length) % HAIR_COLORS.length] ?? '#2b1d14';
+  const hair = age >= 5 ? (seed & 8 ? '#cfcfcf' : '#9a9a9a') : hair0;
+  const f0 = frame[0]; const k = Number(frame[frame.length - 1]) || 0; const ph = (varI || 0) * 1.7 + (seed % 13) * 0.37;
   const walk = /^[wrlx][0-3]$/.test(frame); const t = now / 1000;
-  let legA = 0, legB = 0, armA = 0, armB = 0, drop = 0, lean = 0, lie = 0, sit = false, gun = false, flash = false, thigh = 0;
-  if (walk) { const amp = f0 === 'r' || f0 === 'x' ? 0.95 : f0 === 'l' ? 0.4 : 0.62; const s = Math.sin(t * (f0 === 'r' || f0 === 'x' ? 11 : f0 === 'l' ? 5.5 : 7.5) * (0.92 + 0.08 * (varI || 0)) + ph); legA = s * amp; legB = f0 === 'l' ? -s * amp * 0.35 : -s * amp; armA = -s * amp * 0.75; armB = s * amp * 0.75; lean = f0 === 'r' ? 0.16 : f0 === 'x' ? 0.2 : f0 === 'l' ? 0.1 : 0.03; if (f0 === 'x') { armA = Math.PI - 0.3 + s * 0.2; armB = Math.PI - 0.3 - s * 0.2; } if (f0 === 'l') armB = 0.5; }
+  let legA = 0, legB = 0, armA = 0, armB = 0, drop = 0, lean = 0, lie = 0, sit = false, gun = false, flash = false, thigh = 0, sw = 0;
+  if (walk) { const amp = f0 === 'r' || f0 === 'x' ? 0.95 : f0 === 'l' ? 0.4 : 0.62; const s = Math.sin(t * (f0 === 'r' || f0 === 'x' ? 11 : f0 === 'l' ? 5.5 : 7.5) * (0.92 + 0.08 * (varI || 0)) + ph); sw = s * amp; legA = s * amp; legB = f0 === 'l' ? -s * amp * 0.35 : -s * amp; armA = -s * amp * 0.75; armB = s * amp * 0.75; lean = f0 === 'r' ? 0.16 : f0 === 'x' ? 0.2 : f0 === 'l' ? 0.1 : 0.03; if (f0 === 'x') { armA = Math.PI - 0.3 + s * 0.2; armB = Math.PI - 0.3 - s * 0.2; } if (f0 === 'l') armB = 0.5; }
   else if (/^[sec][01]$/.test(frame)) { sit = true; thigh = 1.45; drop = 0.36; if (f0 === 's') { armA = 1.05 + Math.sin(t * 9 + ph) * 0.07; armB = 1.05 - Math.sin(t * 9 + ph) * 0.07; } else if (f0 === 'e') { armA = k ? 2.0 : 0.9; armB = 0.6; } else { armA = 0.5; armB = 0.5; } }
   else if (/^k[01]$/.test(frame)) { armA = 1.15 + Math.sin(t * 6 + ph) * 0.12; armB = 1.0 - Math.sin(t * 6 + ph) * 0.12; lean = 0.08; }
   else if (/^h[01]$/.test(frame)) { armA = 1.2 + Math.sin(t * 9 + ph) * 0.9; armB = 0.9; lean = 0.12; }
@@ -45532,117 +45557,260 @@ function figure(geo, u, v, y, ang, dept, frame, skinI, hairI, flags, varI, now) 
   else if (/^rl[01]$/.test(frame)) { armA = 0.95; armB = 1.2; gun = true; }
   else if (frame === 'crouch' || frame === 'kneel' || frame === 'u0') { thigh = frame === 'u0' ? 0.6 : 1.1; drop = frame === 'u0' ? 0.16 : 0.3; lean = 0.18; if (flags.includes('g')) { armA = 1.3; armB = 1.25; gun = true; } }
   else if (frame === 'carry' || /^c[0-3]$/.test(frame)) { armA = 0.9; armB = 0.9; }
-  else if (frame === 'react') { armA = 2.7; armB = 2.7; }
+  else if (frame === 'react') { armA = 2.7 + Math.sin(t * 14 + ph) * 0.08; armB = 2.6 - Math.sin(t * 14 + ph) * 0.08; }
   else if (frame === 'f0') lie = 0.5; else if (frame === 'f1') lie = 1.1;
   else if (frame === 'down' || /^[zbd][01]$/.test(frame)) lie = Math.PI / 2;
-  else if (/^i[01]$/.test(frame) || frame === 'idle') { armA = 0.04; armB = -0.04; }
-  if (flags.includes('g') && !gun && !lie && !sit && !walk) gun = false;
+  else if (/^i[01]$/.test(frame) || frame === 'idle') { armA = 0.06 + Math.sin(t * 0.9 + ph) * 0.03; armB = -0.04 - Math.sin(t * 0.9 + ph) * 0.03; }
+  const idle = !walk && !sit && !lie && !gun && !/^[kh][01]$/.test(frame);
+  // expresión
+  let expr = ['smile', 'neutral', 'calm', 'neutral', 'smile', 'stern'][seed % 6];
+  if (frame === 'react' || f0 === 'x') expr = 'fear'; else if (flags.includes('d')) expr = 'angry'; else if (flags.includes('i') || f0 === 'l' || flags.includes('h')) expr = 'worried';
+  else if (/^[ks][01]$/.test(frame) || gun) expr = 'focus'; else if (frame === 'f0' || frame === 'f1') expr = 'fear';
+  const eyesShut = lie && (f0 === 'z' || f0 === 'b' || f0 === 'd' || frame === 'down') || ((t * 1000 + seed * 137) % 4300 < 120 && !lie);
+  // ── esqueleto ──
   let A = AF.mul(AF.t(u, y, v), AF.ry(ang));
   if (lie) { const lift = f0 === 'b' ? 0.36 : f0 === 'z' ? 0.3 : 0.07; A = AF.mul(A, AF.mul(AF.t(0, lift * M2C * Math.min(1, lie / 1.2) + 0.02, 0), AF.rx(-lie))); }
   A = AF.mul(A, AF.s(M2C));
-  A = AF.mul(A, [1.18, 0, 0, 0, 0.96, 0, 0, 0, 1.14, 0, 0, 0]); // Fase 57: proporciones robustas y algo caricaturescas (low poly)
-  const breathe = lie ? 0 : Math.sin(t * 2.2 + ph) * 0.006;
-  const hipY = 0.86 - drop, shY = 1.4 - drop + breathe;
-  const B = lean ? AF.mul(AF.mul(AF.t(0, hipY, 0), AF.rx(lean)), AF.t(0, -hipY, 0)) : null; const U = B ? AF.mul(A, B) : A; // tronco inclinado
-  // ── Fase 55C: cuerpo humanoide (miembros redondeados con codo y rodilla, tronco con hombros y cintura, cabeza ovalada con pelo y cara) ──
-  const ck = L.chunky || 1; // Fase 56: soldados robustos
-  const bw = (1 + (((varI || 0) * 5 + hairI * 3) % 5 - 2) * 0.03) * ck; // complexión: ancho de hombros y cadera
-  const SH = 0.2 * bw, HP = 0.105 * bw; const glove = L.glove ?? (L.hood ? L.shoe : skin);
-  // piernas: muslo, rodilla, pantorrilla y pie
+  A = AF.mul(A, [1.08, 0, 0, 0, 0.98, 0, 0, 0, 1.06, 0, 0, 0]); // proporciones estilizadas (algo robustas)
+  const bob = walk ? Math.abs(sw) * 0.022 : 0; const shift = idle ? Math.sin(t * 0.6 + ph) * 0.012 : 0;
+  if (bob || shift) A = AF.mul(A, AF.t(shift, -bob, 0));
+  const breathe = lie ? 0 : Math.sin(t * 2.2 + ph) * 0.007;
+  const fearUp = expr === 'fear' ? 0.025 : 0;
+  const hipY = 0.86 - drop, shY = 1.4 - drop + breathe + fearUp;
+  const twist = walk ? -sw * 0.16 : 0;                          // los hombros giran al contrario que la cadera
+  let B = AF.id(); if (lean) B = AF.mul(AF.mul(AF.t(0, hipY, 0), AF.rx(lean)), AF.t(0, -hipY, 0)); if (twist) B = AF.mul(B, AF.ry(twist));
+  const U = AF.mul(A, B);
+  const ck = L.ck || 1; const bw = (1 + ((((varI || 0) * 5 + hairI * 3) % 5 + 5) % 5 - 2) * 0.03) * ck;
+  const SH = 0.19 * bw, HP = 0.1 * bw; const D = FIG_D;
+  const M = (m) => { geo.M = m; };
+  const LB = (T, a, b, ra, rb, c, fl = 1, n = 10, ca = true, cb = true) => geo.limb(T, a, b, ra, rb, c, fl, n, ca, cb);
+  const OB = (T, ce, rx, ry, rz, c, n = 10, m = 6, lit = 0) => geo.orb(T, ce, rx, ry, rz, c, n, m, lit);
+  const BX = (T, x0, y0, z0, x1, y1, z1, c) => geo.obox(T, x0, y0, z0, x1, y1, z1, c);
+  const glove = L.glove ?? skin; const gloveMat = L.glove ? (L.armor || L.hood ? MAT.leather : MAT.cloth) : MAT.skin;
+  // ── piernas ──
   for (const [sd, a] of [[-1, legA], [1, legB]]) {
     const hip = [sd * HP, hipY, 0]; let kn, an;
     if (thigh) { kn = [hip[0], hipY - 0.43 * Math.cos(thigh), 0.43 * Math.sin(thigh)]; an = [hip[0], 0.07, kn[2] - (sit ? 0 : 0.05)]; }
     else { const kb = walk ? 0.1 + 0.75 * Math.max(0, -a) + 0.12 * Math.max(0, a) : 0.04; kn = [hip[0], hipY - 0.43 * Math.cos(a), 0.43 * Math.sin(a)]; const b = a - kb; an = [hip[0], Math.max(0.07, kn[1] - 0.4 * Math.cos(b)), kn[2] + 0.4 * Math.sin(b)]; }
-    geo.limb(A, hip, kn, 0.088 * bw, 0.066 * ck, L.legs, 1, 7, true, true);
-    geo.limb(A, kn, an, 0.064 * ck, 0.047 * ck, L.legs, 1, 7, false, false);
-    const up = an[1] > 0.1 ? Math.min(0.08, (an[1] - 0.07) * 0.5) : 0; // pie levantado al andar: la punta cae
-    if (L.armor) { // Fase 56: bota alta, rodillera y bolsillo de muslo
-      const kd = [an[0] - kn[0], an[1] - kn[1], an[2] - kn[2]];
-      geo.limb(A, an, [an[0] + kd[0] * -0.42, an[1] + kd[1] * -0.42, an[2] + kd[2] * -0.42], 0.062, 0.066, L.shoe, 1, 7, false, true);
-      const nk = [kn[0], kn[1] + 0.01, kn[2] + 0.05]; geo.orb(A, nk, 0.07, 0.072, 0.048, L.pads, 7, 4);
-      const th = [(hip[0] + kn[0]) / 2 + sd * 0.07, (hip[1] + kn[1]) / 2, (hip[2] + kn[2]) / 2]; geo.orb(A, th, 0.045, 0.07, 0.06, L.pouch, 6, 4);
+    M(MAT.cloth);
+    LB(A, hip, kn, 0.086 * bw, 0.063 * ck, L.legs, 1, 10, true, false);
+    if (D) OB(A, kn, 0.062 * ck, 0.06, 0.064 * ck, L.legs, 8, 5);
+    LB(A, kn, an, 0.061 * ck, 0.045 * ck, L.legs, 1, 10, false, false);
+    const up = an[1] > 0.1 ? Math.min(0.08, (an[1] - 0.07) * 0.5) : 0;
+    if (L.armor) {
+      M(MAT.leather); const kd = [an[0] - kn[0], an[1] - kn[1], an[2] - kn[2]];
+      LB(A, an, [an[0] - kd[0] * 0.42, an[1] - kd[1] * 0.42, an[2] - kd[2] * 0.42], 0.06, 0.064, L.shoe, 1, 10, false, true);
+      M(MAT.plastic); OB(A, [kn[0], kn[1] + 0.01, kn[2] + 0.05], 0.066, 0.07, 0.046, L.pads, 9, 5);
+      M(MAT.cloth); OB(A, [(hip[0] + kn[0]) / 2 + sd * 0.075, (hip[1] + kn[1]) / 2, (hip[2] + kn[2]) / 2], 0.04, 0.065, 0.058, L.pouch, 8, 5);
     }
-    const fz = L.armor ? 1.22 : 1;
-    geo.limb(A, [an[0], an[1] - 0.02, an[2] - 0.05], [an[0] + sd * 0.012, an[1] - 0.035 - up, an[2] + 0.16 * fz], 0.052 * fz, 0.044 * fz, L.shoe, 0.8, 6, true, true);
+    const fz = L.armor || L.hood ? 1.2 : 1;
+    M(L.armor || L.hood ? MAT.leather : MAT.leather);
+    LB(A, [an[0], an[1] - 0.02, an[2] - 0.05], [an[0] + sd * 0.012, an[1] - 0.035 - up, an[2] + 0.16 * fz], 0.05 * fz, 0.043 * fz, L.shoe, 0.78, 10, true, true);
+    if (D) LB(A, [an[0], an[1] - 0.06, an[2] - 0.06], [an[0] + sd * 0.012, an[1] - 0.07 - up, an[2] + 0.17 * fz], 0.05 * fz, 0.044 * fz, shade(L.shoe, -0.35), 0.35, 8, true, true); // suela
   }
-  // tronco: cadera, cintura, pecho y hombros
-  const wY = hipY + 0.17, cY = shY - 0.06;
-  geo.limb(U, [0, hipY - 0.07, 0], [0, wY, 0], 0.168 * bw, 0.15 * bw, L.legs, 0.66, 9, true, false);
-  geo.limb(U, [0, wY - 0.03, 0], [0, cY, 0.005], 0.152 * bw, SH + 0.012, L.top, 0.62, 9, false, false);
-  geo.limb(U, [0, cY, 0.005], [0, shY + 0.055, 0], SH + 0.012, 0.075, L.top, 0.62, 9, false, false);
-  if (L.vest) { geo.limb(U, [0, wY + 0.02, 0], [0, cY - 0.01, 0.005], 0.165 * bw, SH + 0.03, L.vest, 0.68, 9, false, false); geo.limb(U, [0, cY - 0.01, 0.005], [0, shY + 0.03, 0], SH + 0.03, 0.1, L.vest, 0.68, 9, false, false); }
-  if (L.armor) { // Fase 56/57: placa pectoral, bolsillos, cinturón con hebilla y hombreras de placa
-    const fz = (0.165 * bw) * 0.68;
-    geo.obox(U, -0.15 * bw, wY + 0.12, fz - 0.03, 0.15 * bw, shY - 0.02, fz + 0.045, L.vest);            // placa pectoral
-    geo.obox(U, -0.13 * bw, shY - 0.05, -0.02, 0.13 * bw, shY + 0.06, fz + 0.02, L.vest);                // cuello alto
-    for (const sd of [-1, 1]) geo.obox(U, sd > 0 ? SH - 0.02 : -SH - 0.09, shY - 0.07, -0.09, sd > 0 ? SH + 0.09 : -SH + 0.02, shY + 0.035, 0.09, L.pads); // hombreras
-    for (const x of [-0.105, 0, 0.105]) geo.obox(U, x * bw - 0.045, wY + 0.03, fz - 0.025, x * bw + 0.045, wY + 0.15, fz + 0.035, L.pouch);
-    geo.obox(U, -0.12 * bw, cY - 0.05, fz - 0.005, 0.12 * bw, cY - 0.015, fz + 0.03, L.pouch);
-    geo.limb(U, [0, hipY - 0.01, 0], [0, hipY + 0.05, 0], 0.172 * bw, 0.168 * bw, '#141417', 0.7, 9, false, false);
-    geo.obox(U, -0.03, hipY - 0.005, 0.172 * bw * 0.7 - 0.01, 0.03, hipY + 0.045, 0.172 * bw * 0.7 + 0.012, '#5b5b60');
+  // ── tronco ──
+  const wY = hipY + 0.17, cY = shY - 0.07; const FZ = (SH + 0.018) * 0.64 - 0.004; const FZw = 0.15 * bw * 0.72 + 0.004; // frente del pecho y de la cintura
+  M(MAT.cloth);
+  LB(U, [0, hipY - 0.07, 0], [0, wY, 0], 0.158 * bw, 0.142 * bw, L.legs, 0.68, 12, true, false);
+  LB(U, [0, wY - 0.03, 0], [0, cY, 0.006], 0.142 * bw, SH + 0.018, L.top, 0.64, 12, false, false);
+  LB(U, [0, cY, 0.006], [0, shY + 0.045, 0], SH + 0.018, 0.085, L.top, 0.64, 12, false, true);
+  if (L.coat) { // bata abierta con solapas, faldón, bolsillos y credencial
+    LB(U, [0, wY - 0.02, 0], [0, hipY - 0.32, 0], 0.15 * bw, 0.19 * bw, L.top, 0.72, 12, false, false);
+    if (D) { BX(U, -0.028, cY - 0.2, FZ - 0.005, 0.028, shY + 0.02, FZ + 0.012, L.shirt); if (L.tie) BX(U, -0.011, cY - 0.16, FZ + 0.008, 0.011, shY + 0.01, FZ + 0.02, L.tie); }
+    for (const sd of [-1, 1]) LB(U, [sd * 0.035, shY + 0.03, FZ + 0.004], [sd * 0.07, cY - 0.12, FZ + 0.016], 0.013, 0.016, shade(L.top, -0.1), 0.4, 6, true, true);
+    if (D) { BX(U, -0.12, wY - 0.13, FZw - 0.01, -0.05, wY - 0.07, FZw + 0.012, shade(L.top, -0.06)); BX(U, 0.05, wY - 0.13, FZw - 0.01, 0.12, wY - 0.07, FZw + 0.012, shade(L.top, -0.06)); }
   }
-  if (dept === 'research') geo.limb(U, [0, wY, 0], [0, hipY - 0.3, 0], 0.158 * bw, 0.19 * bw, L.top, 0.72, 9, false, false); // bata
-  // brazos: hombro, codo, antebrazo y mano
+  if (L.suit) { // traje: camisa, corbata y solapas
+    BX(U, -0.03, cY - 0.12, FZ - 0.004, 0.03, shY + 0.02, FZ + 0.012, L.shirt);
+    BX(U, -0.012, cY - 0.1, FZ + 0.008, 0.012, shY + 0.008, FZ + 0.022, L.tie);
+    for (const sd of [-1, 1]) LB(U, [sd * 0.034, shY + 0.03, FZ + 0.004], [sd * 0.05, cY - 0.12, FZ + 0.014], 0.012, 0.014, shade(L.top, -0.18), 0.4, 6, true, true);
+    if (D) for (let i = 0; i < 2; i++) { M(MAT.metal); OB(U, [0.0, wY - 0.02 - i * 0.05, FZ + 0.02], 0.007, 0.007, 0.004, '#c9ccd1', 6, 3); M(MAT.cloth); }
+  }
+  if (L.scrub) { // pijama clínico: escote en V y fonendoscopio
+    M(MAT.skin); for (const sd of [-1, 1]) LB(U, [sd * 0.034, shY + 0.035, FZ - 0.01], [0, shY - 0.055, FZ + 0.004], 0.016, 0.006, skin, 0.5, 6, true, true); M(MAT.cloth);
+    M(MAT.rubber); const st = [[-0.06, shY + 0.03, 0.03], [-0.075, cY - 0.08, FZ + 0.012], [-0.035, cY - 0.15, FZ + 0.02]];
+    LB(U, st[0], st[1], 0.007, 0.007, L.steth, 1, 6, true, false); LB(U, st[1], st[2], 0.007, 0.007, L.steth, 1, 6, false, true);
+    LB(U, [0.06, shY + 0.03, 0.03], [0.07, cY - 0.06, FZ + 0.012], 0.007, 0.007, L.steth, 1, 6, true, true);
+    M(MAT.metal); OB(U, st[2], 0.017, 0.017, 0.01, '#c9ccd1', 8, 4); M(MAT.cloth);
+    if (D) BX(U, -0.11, cY - 0.1, FZ - 0.006, -0.045, cY - 0.05, FZ + 0.01, shade(L.top, -0.08));
+  }
+  if (L.hivis) { // chaleco de alta visibilidad con bandas reflectantes y cinturón de herramientas
+    LB(U, [0, wY, 0], [0, cY + 0.01, 0.006], 0.15 * bw, SH + 0.028, L.hivis, 0.66, 12, false, false);
+    M(MAT.plastic); for (const yy of [wY + 0.04, cY - 0.04]) LB(U, [0, yy, 0], [0, yy + 0.025, 0], 0.152 * bw, 0.153 * bw, L.strip, 0.67, 12, false, false); M(MAT.cloth);
+  }
+  if (L.patch) { BX(U, -0.1, cY - 0.08, FZ - 0.004, -0.035, cY - 0.035, FZ + 0.012, '#f4f1ea'); if (D) BX(U, -0.093, cY - 0.065, FZ + 0.01, -0.042, cY - 0.055, FZ + 0.016, '#2b2b2e'); }
+  if (L.hood) { M(MAT.metal); LB(U, [0, wY + 0.02, -0.12], [0, shY - 0.02, -0.13], 0.06, 0.06, L.tank, 1, 10, true, true); M(MAT.rubber); LB(U, [-0.13, shY - 0.04, 0.02], [-0.04, wY + 0.05, FZ + 0.01], 0.012, 0.012, '#2c2e32', 1, 6, true, true); M(MAT.cloth); }
+  if (L.armor) { // placa pectoral, cuello alto, bolsillos y hombreras
+    M(MAT.plastic);
+    BX(U, -0.15 * bw, wY + 0.1, FZ - 0.03, 0.15 * bw, shY - 0.02, FZ + 0.045, L.vest);
+    BX(U, -0.13 * bw, shY - 0.05, -0.02, 0.13 * bw, shY + 0.055, FZ + 0.02, L.vest);
+    for (const sd of [-1, 1]) LB(U, [sd * (SH + 0.01), shY + 0.0, -0.06], [sd * (SH + 0.01), shY + 0.0, 0.07], 0.06, 0.06, L.pads, 0.62, 10, true, true);
+    M(MAT.cloth);
+    for (const x of [-0.105, 0, 0.105]) BX(U, x * bw - 0.043, wY + 0.03, FZ - 0.02, x * bw + 0.043, wY + 0.13, FZ + 0.06, L.pouch);
+    if (D) for (const x of [-0.105, 0, 0.105]) BX(U, x * bw - 0.043, wY + 0.12, FZ + 0.05, x * bw + 0.043, wY + 0.135, FZ + 0.066, shade(L.pouch, -0.2));
+  }
+  // cinturón con hebilla (y cinturón de herramientas)
+  M(MAT.leather); LB(U, [0, hipY - 0.005, 0], [0, hipY + 0.045, 0], 0.162 * bw, 0.16 * bw, L.toolbelt ?? L.belt ?? '#2a2522', 0.7, 12, false, false);
+  M(MAT.metal); BX(U, -0.026, hipY - 0.002, 0.162 * bw * 0.7 - 0.006, 0.026, hipY + 0.042, 0.162 * bw * 0.7 + 0.012, '#b9bdc2');
+  if (L.toolbelt) { M(MAT.leather); for (const sd of [-1, 1]) BX(U, sd * 0.1 - 0.035, hipY - 0.07, 0.03, sd * 0.1 + 0.035, hipY + 0.03, 0.12, shade(L.toolbelt, 0.1)); }
+  if (L.badge && D) { M(MAT.plastic); BX(U, 0.06, cY - 0.06, FZ + (L.armor ? 0.045 : 0.006), 0.11, cY - 0.0, FZ + (L.armor ? 0.058 : 0.02), '#f4f6f8'); BX(U, 0.06, cY - 0.012, FZ + (L.armor ? 0.057 : 0.019), 0.11, cY - 0.0, FZ + (L.armor ? 0.062 : 0.024), L.badge); }
+  M(MAT.cloth);
+  // ── brazos y manos ──
+  const sleeveSkin = !!L.shortSleeve;
   for (const [sd, a] of [[-1, armA], [1, armB]]) {
-    const sh = [sd * (SH + 0.035), shY - 0.02, 0];
-    let up = a, eb; // ángulo del brazo y flexión del codo
-    if (gun) eb = 0.06; else if (walk) eb = f0 === 'x' ? 0.1 : 0.3 + 0.35 * Math.max(0, a); else if (a > 0.3 && a < 1.6) { up = a * 0.5; eb = a * 0.5 + 0.55; } else eb = a > 1.6 ? 0.1 : 0.14;
+    const sh = [sd * (SH + 0.03), shY - 0.03, 0];
+    let up = a, eb;
+    if (gun) eb = 0.06; else if (walk) eb = f0 === 'x' ? 0.1 : 0.3 + 0.35 * Math.max(0, a); else if (a > 0.3 && a < 1.6) { up = a * 0.5; eb = a * 0.5 + 0.55; } else eb = a > 1.6 ? 0.1 : 0.16;
     const el = [sh[0] + sd * 0.025, sh[1] - 0.27 * Math.cos(up), 0.27 * Math.sin(up)]; const fa = up + eb; const wr = [el[0] - sd * (gun ? 0.09 : 0.01), el[1] - 0.25 * Math.cos(fa), el[2] + 0.25 * Math.sin(fa)];
-    geo.limb(U, sh, el, 0.062 * ck * ck, 0.05 * ck * ck, L.top, 1, 7, true, true);
-    if (L.band && sd < 0) geo.limb(U, [sh[0] + (el[0] - sh[0]) * 0.35, sh[1] + (el[1] - sh[1]) * 0.35, sh[2] + (el[2] - sh[2]) * 0.35], [sh[0] + (el[0] - sh[0]) * 0.6, sh[1] + (el[1] - sh[1]) * 0.6, sh[2] + (el[2] - sh[2]) * 0.6], 0.06 * ck, 0.056 * ck, L.band, 1, 7, false, false);
-    geo.limb(U, el, wr, 0.048 * ck * ck, 0.04 * ck * ck, dept === 'medical' || dept === 'dclass' ? skin : L.top, 1, 7, false, false);
-    const gk = L.armor ? 1.2 : 1;
-    geo.orb(U, [wr[0], wr[1] - 0.035 * Math.cos(fa), wr[2] + 0.035 * Math.sin(fa)], 0.04 * gk, 0.052 * gk, 0.045 * gk, glove, 6, 4);
+    M(MAT.cloth);
+    LB(U, sh, el, 0.058 * ck, 0.048 * ck, L.top, 1, 10, true, false);
+    OB(U, el, 0.047 * ck, 0.047 * ck, 0.047 * ck, sleeveSkin ? skin : L.top, 8, 5);
+    if (sleeveSkin) { M(MAT.skin); LB(U, [sh[0] + (el[0] - sh[0]) * 0.55, sh[1] + (el[1] - sh[1]) * 0.55, sh[2] + (el[2] - sh[2]) * 0.55], el, 0.045 * ck, 0.044 * ck, skin, 1, 10, false, false); }
+    if (L.band && sd < 0) LB(U, [sh[0] + (el[0] - sh[0]) * 0.3, sh[1] + (el[1] - sh[1]) * 0.3, sh[2] + (el[2] - sh[2]) * 0.3], [sh[0] + (el[0] - sh[0]) * 0.55, sh[1] + (el[1] - sh[1]) * 0.55, sh[2] + (el[2] - sh[2]) * 0.55], 0.06 * ck, 0.056 * ck, L.band, 1, 10, false, false);
+    M(sleeveSkin ? MAT.skin : MAT.cloth);
+    LB(U, el, wr, 0.045 * ck, 0.037 * ck, sleeveSkin ? skin : L.top, 1, 10, false, false);
+    if (L.coat && D) { M(MAT.cloth); LB(U, [wr[0] + (el[0] - wr[0]) * 0.18, wr[1] + (el[1] - wr[1]) * 0.18, wr[2] + (el[2] - wr[2]) * 0.18], wr, 0.043, 0.041, shade(L.top, -0.08), 1, 8, false, false); }
+    // mano: palma, dedos juntos y pulgar
+    const dl = Math.hypot(wr[0] - el[0], wr[1] - el[1], wr[2] - el[2]) || 1; const dx = (wr[0] - el[0]) / dl, dy = (wr[1] - el[1]) / dl, dz = (wr[2] - el[2]) / dl;
+    const pc = [wr[0] + dx * 0.03, wr[1] + dy * 0.03, wr[2] + dz * 0.03]; const gk = L.armor ? 1.15 : 1;
+    M(gloveMat); OB(U, pc, 0.034 * gk, 0.04 * gk, 0.03 * gk, glove, 8, 5);
+    if (D) { LB(U, pc, [pc[0] + dx * 0.05, pc[1] + dy * 0.05, pc[2] + dz * 0.05 + 0.006], 0.027 * gk, 0.02 * gk, glove, 0.7, 8, false, true);
+      LB(U, [pc[0] - sd * 0.02, pc[1], pc[2] + 0.012], [pc[0] - sd * 0.035 + dx * 0.025, pc[1] + dy * 0.025, pc[2] + 0.03], 0.012 * gk, 0.01 * gk, glove, 1, 6, true, true); }
+    if (L.hivis && sd > 0 && D && /^[kh][01]$/.test(frame)) { M(MAT.metal); LB(U, pc, [pc[0] + dx * 0.02, pc[1] + 0.12, pc[2] + 0.04], 0.01, 0.01, '#a3abb4', 1, 6, true, true); OB(U, [pc[0] + dx * 0.02, pc[1] + 0.13, pc[2] + 0.04], 0.022, 0.014, 0.012, '#a3abb4', 6, 3); }
   }
-  // cuello y cabeza
-  const hy = shY + 0.07, hc = hy + 0.145;
-  geo.limb(U, [0, shY + 0.03, 0], [0, hy + 0.06, 0.005], 0.055, 0.05, L.hood ? L.cap : L.mask ?? skin, 1, 6, false, false);
-  if (L.hood) { geo.orb(U, [0, hc, 0], 0.125, 0.15, 0.13, L.cap, 9, 6); geo.obox(U, -0.085, hc - 0.045, 0.105, 0.085, hc + 0.05, 0.134, '#22262b'); }
-  else if (L.mask) { // Fase 56: máscara de gas, ojos luminosos, filtro y casco con borde (imagen de referencia)
-    geo.orb(U, [0, hc - 0.005, 0.005], 0.108, 0.135, 0.118, L.mask, 9, 6);
-    for (const ex of [-0.045, 0.045]) {
-      if (L.eyeOct) { geo.orb(U, [ex, hc + 0.012, 0.1], 0.05, 0.046, 0.02, '#1a2027', 8, 2); geo.orb(U, [ex, hc + 0.012, 0.11], 0.04, 0.036, 0.016, L.eye, 8, 2, 1.45); continue; } // octógonos luminosos
-      geo.orb(U, [ex, hc + 0.012, 0.098], 0.047, 0.047, 0.024, '#111113', 8, 4);
-      geo.orb(U, [ex, hc + 0.012, 0.11], 0.039, 0.039, 0.02, L.eye, 8, 4, 1.4);
-      geo.orb(U, [ex - 0.012, hc + 0.024, 0.126], 0.011, 0.011, 0.005, '#fff2ea', 4, 3, 1.3);
-    }
-    if (L.emblem) geo.obox(U, -0.03, hc + 0.075, 0.112, 0.03, hc + 0.115, 0.135, L.emblem);
-    geo.limb(U, [0.012, hc - 0.05, 0.1], [0.022, hc - 0.095, 0.17], 0.045, 0.042, L.filter, 1, 8, false, true);
-    geo.orb(U, [0.022, hc - 0.095, 0.172], 0.03, 0.03, 0.012, '#18181a', 6, 3);
-    geo.limb(U, [0, hc + 0.035, -0.005], [0, hc + 0.13, -0.01], 0.13, 0.112, L.cap, 1.1, 10, false, true);
-    geo.limb(U, [0, hc + 0.025, -0.005], [0, hc + 0.045, -0.005], 0.142, 0.14, L.cap, 1.08, 10, true, false);
+  // ── cuello y cabeza (la cabeza gira: mira alrededor, baja la vista al trabajar, se encoge con miedo) ──
+  const hy = shY + 0.07;
+  const yaw = idle ? Math.sin(t * 0.37 + ph * 2) * 0.42 + Math.sin(t * 1.3 + ph) * 0.05 : walk ? -twist * 0.6 + Math.sin(t * 0.8 + ph) * 0.12 : expr === 'fear' ? Math.sin(t * 5 + ph) * 0.35 : 0;
+  const pitch = /^[ks][01]$/.test(frame) ? 0.28 : expr === 'fear' ? -0.15 : sit ? 0.12 : 0;
+  const Hd = AF.mul(U, AF.mul(AF.t(0, hy, 0), AF.mul(AF.ry(yaw), AF.rx(pitch))));
+  M(L.hood ? MAT.cloth : MAT.skin); LB(U, [0, shY + 0.02, 0], [0, hy + 0.05, 0.004], 0.05, 0.045, L.hood ? L.top : L.mask ?? skin, 1, 10, false, false);
+  if (L.armor && !L.mask) { M(MAT.cloth); LB(U, [0, shY + 0.01, 0], [0, hy + 0.025, 0.004], 0.058, 0.054, '#1f2125', 1, 10, false, false); } // braga de cuello
+  if (L.hood) { // capucha de contención con visor
+    M(MAT.cloth); OB(Hd, [0, 0.14, 0], 0.13, 0.155, 0.135, L.top, 12, 8);
+    M(MAT.plastic); OB(Hd, [0, 0.15, 0.06], 0.1, 0.07, 0.085, L.visorC, 12, 6);
+    if (D) OB(Hd, [-0.035, 0.175, 0.13], 0.03, 0.012, 0.006, '#9fc3dc', 6, 3, 1.1);
+    M(MAT.cloth); return gunDraw();
   }
-  else {
-    const face = skin; // Fase 57: cara visible, con visor sobre los ojos
-    geo.orb(U, [0, hc, 0], 0.104, 0.135, 0.114, face, 9, 6);
-    geo.orb(U, [-0.104, hc - 0.005, 0], 0.016, 0.03, 0.02, face, 5, 3); geo.orb(U, [0.104, hc - 0.005, 0], 0.016, 0.03, 0.02, face, 5, 3); // orejas
-    if (L.visor) { geo.obox(U, -0.09, hc - 0.002, 0.098, 0.09, hc + 0.042, 0.124, L.visor); geo.obox(U, -0.07, hc + 0.03, 0.12, 0.0, hc + 0.036, 0.127, '#fff1b0'); geo.obox(U, -0.024, hc - 0.07, 0.092, 0.024, hc - 0.061, 0.106, '#8a4a44'); }
-    else { // ojos, cejas, nariz y boca
-      for (const ex of [-0.04, 0.04]) { geo.obox(U, ex - 0.013, hc + 0.004, 0.103, ex + 0.013, hc + 0.026, 0.113, '#f4f1ea'); geo.obox(U, ex - 0.007, hc + 0.006, 0.108, ex + 0.007, hc + 0.024, 0.116, '#1d1a18'); geo.obox(U, ex - 0.02, hc + 0.036, 0.1, ex + 0.02, hc + 0.045, 0.114, hair); }
-      geo.limb(U, [0, hc + 0.012, 0.108], [0, hc - 0.03, 0.128], 0.008, 0.016, skin, 1, 4, false, true);
-      geo.obox(U, -0.024, hc - 0.07, 0.092, 0.024, hc - 0.061, 0.106, '#8a4a44');
-    }
-    if (L.cap && L.brim) { geo.orb(U, [0, hc + 0.075, -0.005], 0.128, 0.085, 0.138, L.cap, 9, 5); geo.limb(U, [0, hc + 0.062, 0.02], [0, hc + 0.074, 0.02], 0.165, 0.13, L.cap, 1.08, 9, true, false); } // casco con ala
-    else if (L.cap) { geo.limb(U, [0, hc + 0.055, -0.005], [0, hc + 0.14, -0.005], 0.115, 0.102, L.cap, 1.1, 9, false, true); if (!L.visor) geo.obox(U, -0.085, hc + 0.055, 0.08, 0.085, hc + 0.07, 0.2, L.cap); } // gorra con visera
-    else {
-      const style = (hairI + (varI || 0)) % 4; // 0 corto · 1 media melena · 2 moño · 3 rapado
-      if (style === 3) geo.orb(U, [0, hc + 0.022, -0.012], 0.108, 0.122, 0.118, hair, 9, 5);
-      else { geo.orb(U, [0, hc + 0.034, -0.018], 0.113, 0.123, 0.124, hair, 9, 5); geo.limb(U, [0, hc + 0.06, -0.06], [0, hc - 0.07, -0.085], 0.1, 0.075, hair, 0.5, 7, false, true); }
-      if (style === 1) geo.limb(U, [0, hc - 0.02, -0.06], [0, shY + 0.0, -0.085], 0.118, 0.1, hair, 0.5, 8, false, true);
-      if (style === 2) geo.orb(U, [0, hc + 0.1, -0.1], 0.05, 0.05, 0.05, hair, 6, 4);
-    }
-  }
-  if (gun) { // Fase 56: carabina con cajón, guardamanos, cañón, cargador, culata y asa
+  face(geo, Hd, L, dept, skin, hair, seed, age, expr, eyesShut, D, t, ph);
+  return gunDraw();
+  function gunDraw() {
+    if (!gun) { M(MAT.cloth); return; }
     const T = AF.mul(U, AF.mul(AF.t(0.1, shY - 0.03, 0), AF.rx(-armA))); const gc = L.gun ?? '#1d1f22', gl = shade(gc, 0.18);
-    geo.obox(T, -0.03, -0.66, -0.03, 0.03, -0.42, 0.08, gc);
-    geo.obox(T, -0.034, -0.86, -0.025, 0.034, -0.66, 0.07, gl);
-    geo.limb(T, [0, -0.86, 0.025], [0, -1.02, 0.025], 0.017, 0.015, gc, 1, 6, false, true);
-    geo.obox(T, -0.02, -0.6, -0.17, 0.02, -0.52, -0.03, gl);
-    geo.obox(T, -0.026, -0.42, -0.05, 0.026, -0.2, 0.06, gc);
-    geo.obox(T, -0.014, -0.62, 0.08, 0.014, -0.46, 0.11, gl);
-    if (flash) geo.orb(T, [0, -1.08, 0.025], 0.07, 0.11, 0.07, '#ffd66b', 6, 4, 1.4);
+    M(MAT.metal);
+    BX(T, -0.03, -0.66, -0.03, 0.03, -0.42, 0.08, gc); BX(T, -0.034, -0.86, -0.025, 0.034, -0.66, 0.07, gl);
+    LB(T, [0, -0.86, 0.025], [0, -1.02, 0.025], 0.017, 0.015, gc, 1, 8, false, true);
+    M(MAT.plastic); BX(T, -0.02, -0.6, -0.17, 0.02, -0.52, -0.03, gl); BX(T, -0.026, -0.42, -0.05, 0.026, -0.2, 0.06, gc); BX(T, -0.014, -0.62, 0.08, 0.014, -0.46, 0.11, gl);
+    if (flash) OB(T, [0, -1.08, 0.025], 0.07, 0.11, 0.07, '#ffd66b', 6, 4, 1.4);
+    M(MAT.cloth);
   }
 }
+/** Cabeza en coordenadas propias (origen en la base del cuello, +z hacia delante). */
+function face(geo, H, L, dept, skin, hair, seed, age, expr, shut, D, t, ph) {
+  const OB = (ce, rx, ry, rz, c, n = 10, m = 6, lit = 0) => geo.orb(H, ce, rx, ry, rz, c, n, m, lit);
+  const LB = (a, b, ra, rb, c, fl = 1, n = 8, ca = true, cb = true) => geo.limb(H, a, b, ra, rb, c, fl, n, ca, cb);
+  const M = (m) => { geo.M = m; };
+  const masked = !!L.mask;
+  const jw = 0.068 + ((seed >> 3) % 4) * 0.006; const ns = 1 + (((seed >> 5) % 3) - 1) * 0.16; const ch = 0.03 + ((seed >> 9) % 3) * 0.004;
+  const skD = shade(skin, -0.12), lip = mix(skin, '#9c3f48', 0.42);
+  M(MAT.skin);
+  if (!masked) {
+    OB([0, 0.152, -0.006], 0.1, 0.112, 0.106, skin, 14, 9);           // cráneo
+    OB([0, 0.094, 0.022], jw, 0.07, 0.084, skin, 12, 7);              // mandíbula
+    if (D) { OB([0, 0.06, 0.056], 0.03, 0.026, 0.03, skin, 8, 5);      // mentón
+    for (const sd of [-1, 1]) OB([sd * 0.052, 0.118, 0.066], ch, ch * 0.85, ch, skin, 8, 5); } // pómulos
+    for (const sd of [-1, 1]) { OB([sd * 0.1, 0.138, -0.004], 0.019, 0.034, 0.026, skin, 8, 5); if (D) OB([sd * 0.106, 0.138, 0.002], 0.009, 0.022, 0.014, skD, 6, 4); } // orejas
+    // nariz: puente, punta y aletas
+    if (D) LB([0, 0.152, 0.1], [0, 0.116, 0.121 * (0.96 + ns * 0.04)], 0.011 * ns, 0.016 * ns, skin, 1, 8, true, true);
+    OB([0, 0.112, 0.118 + 0.006 * ns], 0.017 * ns, 0.016, 0.016 * ns, skin, 8, 5);
+    if (D) for (const sd of [-1, 1]) OB([sd * 0.013 * ns, 0.106, 0.11], 0.01, 0.009, 0.01, skin, 6, 4);
+    // ojos: blanco, iris, pupila y brillo; párpados según expresión y parpadeo
+    const iris = EYE_COLS[seed % EYE_COLS.length];
+    const lidDrop = shut ? 1 : expr === 'calm' ? 0.45 : expr === 'focus' ? 0.35 : expr === 'fear' ? -0.15 : expr === 'angry' ? 0.3 : 0.12;
+    for (const sd of [-1, 1]) {
+      const ex = sd * 0.037, ey = 0.146, ez = 0.09;
+      M(MAT.plastic); OB([ex, ey, ez], 0.019, 0.016 + (expr === 'fear' ? 0.003 : 0), 0.013, '#f6f3ee', 10, 6);
+      if (!shut && D) { OB([ex, ey - 0.001, ez + 0.011], 0.0105, 0.0105, 0.004, iris, 10, 4); OB([ex, ey - 0.001, ez + 0.0145], 0.0055, 0.0055, 0.0022, '#121010', 8, 3); OB([ex - 0.004, ey + 0.004, ez + 0.0165], 0.0022, 0.0022, 0.001, '#ffffff', 6, 3, 1.35); }
+      else if (!shut) OB([ex, ey, ez + 0.012], 0.008, 0.009, 0.003, '#1b1512', 6, 3);
+      M(MAT.skin);
+      const lid = Math.max(0, lidDrop); if (D || shut) OB([ex, ey + 0.012 - lid * 0.011, ez + 0.002], 0.021, 0.008 + lid * 0.009, 0.014, skD, 10, 5); // párpado superior
+      if (D) OB([ex, ey - 0.016, ez], 0.02, 0.005, 0.012, skin, 8, 4);                                                          // párpado inferior
+      // cejas: inclinación por expresión
+      const inner = expr === 'angry' || expr === 'focus' ? -0.012 : expr === 'worried' || expr === 'fear' ? 0.012 : expr === 'stern' ? -0.006 : 0;
+      const lift = expr === 'fear' ? 0.008 : 0; const browC = age >= 5 ? '#d9d9d9' : shade(hair, -0.05);
+      M(MAT.hair); LB([sd * 0.016, 0.168 + inner + lift, 0.1], [sd * 0.058, 0.17 + lift - inner * 0.3, 0.088], 0.0055, 0.0045, browC, 0.6, 6, true, true);
+    }
+    // boca
+    M(MAT.skin); const my = 0.083, mz = 0.104;
+    if (expr === 'fear' || expr === 'angry' && (Math.floor(t * 2 + ph) % 3 === 0)) {
+      OB([0, my - 0.004, mz - 0.002], 0.019, 0.014, 0.008, '#4a1c1f', 8, 5);
+      if (D) OB([0, my + 0.006, mz + 0.001], 0.014, 0.004, 0.005, '#f4f1ea', 6, 3);
+      LB([-0.02, my + 0.008, mz], [0.02, my + 0.008, mz], 0.0045, 0.0045, lip, 0.6, 6);
+    } else {
+      const c = expr === 'smile' ? 0.008 : expr === 'worried' || expr === 'stern' ? -0.006 : expr === 'calm' ? 0.003 : 0;
+      LB([-0.026, my + c, mz - 0.006], [0, my + 0.002, mz + 0.002], 0.0045, 0.0055, lip, 0.6, 6, true, false);
+      LB([0, my + 0.002, mz + 0.002], [0.026, my + c, mz - 0.006], 0.0055, 0.0045, lip, 0.6, 6, false, true);
+      if (D > 1) LB([-0.016, my - 0.008, mz - 0.002], [0.016, my - 0.008, mz - 0.002], 0.006, 0.006, lip, 0.6, 6);       // labio inferior
+      if (expr === 'smile' && D) for (const sd of [-1, 1]) OB([sd * 0.03, my + 0.012, mz - 0.012], 0.006, 0.01, 0.005, skD, 6, 3); // mejillas al sonreír
+    }
+    if (age >= 5 && D) { M(MAT.skin); for (const yy of [0.196, 0.206]) LB([-0.04, yy, 0.088], [0.04, yy, 0.088], 0.0025, 0.0025, skD, 0.5, 5); } // arrugas
+    // barba / bigote / sombra
+    const bd = (seed >> 7) % 6;
+    if (bd === 0 && !L.armor) { M(MAT.hair); OB([0, 0.078, 0.042], jw + 0.006, 0.05, 0.072, hair, 12, 7); LB([-0.026, 0.094, 0.106], [0.026, 0.094, 0.106], 0.008, 0.008, hair, 0.7, 6); }
+    else if (bd === 1 && !L.armor) { M(MAT.hair); LB([-0.026, 0.094, 0.107], [0, 0.097, 0.112], 0.007, 0.009, hair, 0.7, 6, true, false); LB([0, 0.097, 0.112], [0.026, 0.094, 0.107], 0.009, 0.007, hair, 0.7, 6, false, true); }
+    else if (bd === 2) { M(MAT.skin); OB([0, 0.078, 0.04], jw + 0.002, 0.045, 0.07, shade(skin, -0.18), 10, 6); }
+    // gafas
+    if (D && ((dept === 'research' && seed % 3 === 0) || (dept === 'administration' && seed % 5 === 0) || (dept === 'medical' && seed % 7 === 0))) {
+      M(MAT.metal); const gc = seed % 2 ? '#2b2f36' : '#8a6a3a';
+      for (const sd of [-1, 1]) { const ex = sd * 0.037; LB([ex - 0.022, 0.158, 0.11], [ex + 0.022, 0.158, 0.11], 0.003, 0.003, gc, 1, 5); LB([ex - 0.022, 0.134, 0.108], [ex + 0.022, 0.134, 0.108], 0.003, 0.003, gc, 1, 5); LB([ex - 0.022, 0.158, 0.11], [ex - 0.022, 0.134, 0.108], 0.003, 0.003, gc, 1, 5); LB([ex + 0.022, 0.158, 0.11], [ex + 0.022, 0.134, 0.108], 0.003, 0.003, gc, 1, 5); LB([sd * 0.059, 0.152, 0.106], [sd * 0.1, 0.152, 0.0], 0.0025, 0.0025, gc, 1, 5); }
+      LB([-0.015, 0.152, 0.112], [0.015, 0.152, 0.112], 0.003, 0.003, gc, 1, 5);
+    }
+  }
+  // ── tocados ──
+  if (masked) { // máscara de gas con lentes luminosas, filtro y casco
+    M(MAT.rubber); OB([0, 0.135, 0.008], 0.106, 0.13, 0.114, L.mask, 14, 9);
+    for (const sd of [-1, 1]) {
+      const ex = sd * 0.042;
+      if (L.eyeOct) { M(MAT.metal); OB([ex, 0.15, 0.1], 0.05, 0.046, 0.02, '#1a2027', 8, 2); OB([ex, 0.15, 0.111], 0.04, 0.036, 0.016, L.eye, 8, 2, 1.45); }
+      else { M(MAT.metal); OB([ex, 0.15, 0.098], 0.046, 0.046, 0.022, '#111113', 12, 5); OB([ex, 0.15, 0.11], 0.038, 0.038, 0.018, L.eye, 12, 5, 1.4); OB([ex - 0.012, 0.162, 0.126], 0.01, 0.01, 0.004, '#fff2ea', 6, 3, 1.3); }
+    }
+    M(MAT.rubber); LB([0.0, 0.09, 0.1], [0.0, 0.05, 0.168], 0.044, 0.042, L.filter, 1, 12, false, true);
+    if (D) { M(MAT.metal); for (let i = 0; i < 3; i++) LB([0, 0.08 - i * 0.012, 0.13 + i * 0.012], [0, 0.08 - i * 0.012 + 0.0001, 0.13 + i * 0.012], 0.047, 0.047, shade(L.filter, -0.25), 1, 12, false, false); }
+    M(MAT.plastic); LB([0, 0.17, -0.005], [0, 0.265, -0.01], 0.128, 0.108, L.helmet, 1.1, 14, false, true); LB([0, 0.163, -0.005], [0, 0.18, -0.005], 0.14, 0.138, L.helmet, 1.08, 14, true, false);
+    if (L.emblem) BX3(geo, H, -0.028, 0.2, 0.118, 0.028, 0.235, 0.138, L.emblem);
+    if (D) for (const sd of [-1, 1]) { M(MAT.rubber); LB([sd * 0.104, 0.15, -0.02], [sd * 0.1, 0.15, -0.09], 0.01, 0.01, '#1c1d20', 1, 6); }
+    M(MAT.cloth); return;
+  }
+  if (L.helmet) { // casco de Seguridad con visor amarillo
+    M(MAT.plastic); OB([0, 0.2, -0.008], 0.118, 0.1, 0.126, L.helmet, 14, 8); LB([0, 0.172, -0.008], [0, 0.186, -0.008], 0.134, 0.13, shade(L.helmet, -0.12), 1.06, 14, true, false);
+    OB([0, 0.152, 0.068], 0.096, 0.026, 0.05, L.visor, 12, 4); if (D) OB([-0.03, 0.16, 0.112], 0.03, 0.006, 0.006, '#fff1b0', 6, 3, 1.15);
+    M(MAT.cloth); return;
+  }
+  if (L.hat) { // casco de obra
+    M(MAT.plastic); OB([0, 0.215, -0.006], 0.112, 0.092, 0.118, L.hat, 14, 8); LB([0, 0.19, 0.0], [0, 0.198, 0.0], 0.15, 0.148, shade(L.hat, -0.08), 1.08, 14, true, true);
+    if (D) LB([0, 0.27, -0.12], [0, 0.29, 0.09], 0.012, 0.012, shade(L.hat, -0.14), 0.6, 6);
+    hairDo(geo, H, hair, 7, D); M(MAT.cloth); return;
+  }
+  if (L.cap) { M(MAT.cloth); OB([0, 0.2, -0.012], 0.11, 0.095, 0.116, L.cap, 14, 8); LB([0, 0.18, -0.012], [0, 0.19, -0.012], 0.112, 0.112, shade(L.cap, -0.08), 1.04, 14, false, false); M(MAT.cloth); return; }
+  hairDo(geo, H, hair, ((seed >> 2) + (dept === 'dclass' ? 7 : 0)) % 8, D);
+  M(MAT.cloth);
+}
+function BX3(geo, H, x0, y0, z0, x1, y1, z1, c) { geo.obox(H, x0, y0, z0, x1, y1, z1, c); }
+function hairDo(geo, H, c, style, D) {
+  const OB = (ce, rx, ry, rz, n = 12, m = 7) => geo.orb(H, ce, rx, ry, rz, c, n, m);
+  const LB = (a, b, ra, rb, fl = 1, n = 10, ca = true, cb = true) => geo.limb(H, a, b, ra, rb, c, fl, n, ca, cb);
+  geo.M = MAT.hair;
+  switch (style) {
+    case 0: OB([0, 0.19, -0.016], 0.106, 0.092, 0.112); break;                                              // corto
+    case 1: OB([0, 0.19, -0.016], 0.106, 0.092, 0.112); OB([-0.035, 0.248, 0.04], 0.075, 0.03, 0.07); break; // raya al lado
+    case 2: OB([0, 0.19, -0.02], 0.11, 0.096, 0.116); LB([0, 0.17, -0.035], [0, 0.065, -0.05], 0.112, 0.098, 0.92, 12, false, true); break; // media melena
+    case 3: OB([0, 0.19, -0.016], 0.106, 0.092, 0.112); LB([0, 0.2, -0.105], [0, 0.07, -0.16], 0.03, 0.018, 1, 8); OB([0, 0.2, -0.105], 0.035, 0.03, 0.03, 8, 5); break; // coleta
+    case 4: OB([0, 0.19, -0.016], 0.106, 0.092, 0.112); OB([0, 0.255, -0.075], 0.045, 0.042, 0.045, 10, 6); break; // moño
+    case 5: OB([0, 0.13, -0.035], 0.104, 0.06, 0.098); break;                                                // calvo con lados
+    case 6: OB([0, 0.2, -0.012], 0.132, 0.118, 0.13, 14, 8); if (D) for (let i = 0; i < 6; i++) { const a = i * 1.05; OB([Math.cos(a) * 0.11, 0.22 + (i % 2) * 0.04, Math.sin(a) * 0.1 - 0.01], 0.04, 0.04, 0.04, 8, 5); } break; // rizado
+    default: geo.orb(H, [0, 0.175, -0.01], 0.103, 0.1, 0.109, shade(c, 0.22), 12, 7);                       // rapado
+  }
+}
+
 const headingOf = (back, flip) => (!back && !flip ? Math.PI / 2 : back && flip ? -Math.PI / 2 : !back && flip ? 0 : Math.PI);
 
 // ───────── captura del dibujo 2D como geometría ─────────
@@ -45705,8 +45873,10 @@ class Capture {
     if (!p) { if (!isP && !isA) return; p = { u: ax / 64 + ay / 32, v: ay / 32 - ax / 64, z: 0 }; }
     const y = (p.z + zpx) / KZ;
     if (isP) {
+      const o = this.view?.o; // Fase 58: fuera de pantalla no se construye la figura (sí se puede seleccionar)
+      if (o?.vp) { const pr = o.project(p.u, y + 0.5, p.v); if (pr.w <= 0 || pr.x < -160 || pr.x > o.w + 160 || pr.y < -220 || pr.y > o.h + 220) { if (this.cur) this.picks.push({ type: this.cur.type, id: this.cur.id, u: p.u, v: p.v, y: y + 0.55, r: 0.5 }); return; } }
       const q = m.params.split('|'); const back = q[1] === 'b';
-      figure(this.geo, p.u, p.v, y, headingOf(back, flip), q[0], q[2], Number(q[3]) || 0, Number(q[4]) || 0, q[5] ?? '', Number(q[6]) || 0, this.now);
+      figure(this.geo, p.u, p.v, y, headingOf(back, flip), q[0], q[2], Number(q[3]) || 0, Number(q[4]) || 0, q[5] ?? '', Number(q[6]) || 0, this.now, Number(q[7]) || 0); this.geo.M = null;
       if (this.cur) this.picks.push({ type: this.cur.type, id: this.cur.id, u: p.u, v: p.v, y: y + 0.55, r: 0.5 });
       return;
     }
@@ -45952,7 +46122,7 @@ class Models {
 }
 const MODELS = new Models();
 
-function loadPref() { try { const v = localStorage.getItem(PREF_KEY); return v === null ? true : v === '1'; } catch (e) { return true; } }
+function loadPref() { try { localStorage.setItem(PREF_KEY, '1'); } catch (e) { /* sin almacenamiento */ } return true; } // Fase 58: el modo 2D se retira; siempre 3D
 
 // ───────── vista de la instalación ─────────
 class View3D {
@@ -45961,7 +46131,7 @@ class View3D {
     this._mk = () => { const c = document.createElement('canvas'); c.id = 'view-3d'; c.style.cssText = 'position:fixed;inset:0;width:100%;height:100%;display:none;pointer-events:none'; return c; };
     mountEngine(this, this._mk); canvas2d.before(this.glc);
     Three.on(() => { if (!!this.g.three !== Three.use) this.swapEngine(); else this.onEngine?.(); }); Three.load();
-    this.o = new Orbit(); this.geo = new Geo(); this.stat = new Geo(); this.cap = new Capture(MODELS);
+    this.o = new Orbit(); this.geo = new Geo(); this.stat = new Geo(); this.cap = new Capture(MODELS); this.cap.view = this; // Fase 58: para descartar personas fuera de pantalla
     this.gnear = document.createElement('canvas'); this.gfar = document.createElement('canvas'); this.groundAt = -1e9; this.stats = { ms: 0, tris: 0, ground: 0 };
     this.picks = [];
     cam.v3 = this; renderer.v3 = this;
@@ -45972,7 +46142,7 @@ class View3D {
   swapEngine() { mountEngine(this, this._mk); this._gkey = null; this.groundAt = -1e9; this._trKey = null; this._trMesh = null; this._stMeshes = null; this.gr = null; this._apply(); this.onEngine?.(); }
   get engine() { return this.g.name; }
   get on() { return this.pref && this.ok; }
-  setOn(v) { this.pref = !!v; try { localStorage.setItem(PREF_KEY, v ? '1' : '0'); } catch (e) { /* sin almacenamiento */ } this._apply(); }
+  setOn(v) { if (!v && !this.fail) return; /* Fase 58: solo se apaga si el 3D falla (salvavidas) */ this.pref = !!v; try { localStorage.setItem(PREF_KEY, v ? '1' : '0'); } catch (e) { /* sin almacenamiento */ } this._apply(); }
   _apply() {
     const on = this.on; this.glc.style.display = on ? 'block' : 'none'; document.documentElement.classList.toggle('v3-on', on);
     this.r.dirty = true; this.r.layoutDirty = true; this.groundAt = -1e9; this.onChange?.(on);
@@ -46069,7 +46239,7 @@ class View3D {
     if (this._gkey !== gkey || now - this.groundAt > every || this._gsel !== (r.yardGhost ? 1 : 0)) { this._gkey = gkey; this._gsel = r.yardGhost ? 1 : 0; this.groundAt = now; this._ground(st); r.sprites.setScale(2); }
     this._static(st);
     // dinámico: actores (personas, anomalías, patio, vehículos, puertas), selección y avisos
-    const geo = this.geo; geo.reset(); const cap = this.cap; cap.begin(geo, now);
+    const geo = this.geo; geo.reset(); const cap = this.cap; FIG_D = (this.cam?.zoom ?? 2) >= 2.6 ? 2 : (this.cam?.zoom ?? 2) >= 1.1 ? 1 : 0; cap.begin(geo, now);
     const o2 = this.c2.getContext('2d'); o2.setTransform(1, 0, 0, 1, 0, 0); o2.clearRect(0, 0, W, Hh); o2.setTransform(dpr, 0, 0, dpr, 0, 0);
     const pctx = makeCtx(cap, o2); const keep = r.ctx, keepOv = r.overlayCtx; r.ctx = pctx; r.overlayCtx = null; r.actorBoxes = []; let badges = [];
     try {
@@ -46121,7 +46291,7 @@ class Tac3D {
     this.ui = ui; this._mk = () => { const c = document.createElement('canvas'); c.className = 'tac-canvas'; c.style.pointerEvents = 'none'; return c; };
     mountEngine(this, this._mk); ui.canvas.before(this.glc);
     Three.on(() => { if (!!this.g.three !== Three.use) mountEngine(this, this._mk); });
-    this.o = new Orbit(); this.geo = new Geo(); this.cap = new Capture(MODELS); this.zoom = 1; this.ptr = new Map(); this.moved = false;
+    this.o = new Orbit(); this.geo = new Geo(); this.cap = new Capture(MODELS); this.cap.view = this; this.zoom = 1; this.ptr = new Map(); this.moved = false;
     const cv = ui.canvas; const pos = (e) => { const r = cv.getBoundingClientRect(); return { x: e.clientX - r.left, y: e.clientY - r.top }; };
     cv.addEventListener('pointerdown', (e) => { if (!this.active) return; this.ptr.set(e.pointerId, pos(e)); this.moved = false; this.down = pos(e); this.pin = this._pinch(); try { cv.setPointerCapture(e.pointerId); } catch (x) { /* nada */ } });
     cv.addEventListener('pointermove', (e) => {
@@ -46154,7 +46324,7 @@ class Tac3D {
   _draw3(now, sc) {
     const ui = this.ui, g = this.g; this.active = true; const dpr = ui.dpr; g.size(ui.canvas.width, ui.canvas.height); this.glc.style.width = ui.w + 'px'; this.glc.style.height = ui.h + 'px';
     this._cam(sc);
-    const geo = this.geo; geo.reset(); const cap = this.cap; cap.begin(geo, now);
+    const geo = this.geo; geo.reset(); const cap = this.cap; FIG_D = (this.cam?.zoom ?? 2) >= 2.6 ? 2 : (this.cam?.zoom ?? 2) >= 1.1 ? 1 : 0; cap.begin(geo, now);
     const o2 = ui.ctx; o2.setTransform(1, 0, 0, 1, 0, 0); o2.clearRect(0, 0, ui.canvas.width, ui.canvas.height);
     try { ui._draw(now, sc, makeCtx(cap, null), dpr); } catch (e) { this.err = String(e?.message ?? e); } finally { cap.end(); }
     const night = !!sc.night; const sky = night ? [0.03, 0.05, 0.08] : sc.terrain === 'NA-05' ? [0.5, 0.56, 0.63] : [0.22, 0.3, 0.36];
@@ -46243,7 +46413,7 @@ function startGame() {
   const v3bar = (() => { // botonera de cámara
     const el = (t, c, p, x) => { const e = document.createElement(t); if (c) e.className = c; if (x != null) e.textContent = x; p.appendChild(e); return e; };
     const bar = el('div', 'v3-bar', document.body); const mk = (txt, title, fn) => { const b = el('button', '', bar, txt); b.title = title; b.setAttribute('aria-label', title); b.addEventListener('click', (ev) => { ev.stopPropagation(); fn(); }); return b; };
-    const tg = mk('3D', 'Cambiar entre vista 3D y 2D', () => v3.setOn(!v3.on)); tg.dataset.v3 = 'toggle';
+    const tg = { classList: { toggle() {} }, dataset: {} }; // Fase 58: sin botón 2D/3D (el juego es solo 3D)
     const bs = [mk('⟲', 'Girar a la izquierda (Q)', () => v3.rotate(Math.PI / 8)), mk('⟳', 'Girar a la derecha (E)', () => v3.rotate(-Math.PI / 8)), mk('▲', 'Vista más desde arriba (R)', () => v3.rotate(0, 0.14)), mk('▼', 'Vista más rasante (F)', () => v3.rotate(0, -0.14)), mk('⌂', 'Vista inicial', () => v3.resetView())];
     const refresh = () => { tg.textContent = v3.on ? '3D' : '2D'; tg.classList.toggle('on', v3.on); tg.disabled = !v3.ok; for (const b of bs) b.hidden = !v3.on; };
     refresh(); return { bar, refresh };
