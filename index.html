@@ -26463,25 +26463,26 @@ def('__missing', {
   },
 });
 
+// Fase 56.2 (estilo EG2): suelos claros de baldosa grande con junta y bisel, como la imagen de referencia
 const FLOORS = {
-  concrete: { base: '#5a5f65', line: '#4c5157', kind: 'speckle' },
-  industrial: { base: '#4f5660', line: '#3f454e', kind: 'plate' },
-  lab: { base: '#c7d0d5', line: '#aab5bc', kind: 'tile' },
-  medical: { base: '#b7d3cd', line: '#9cbbb4', kind: 'tile' },
-  security: { base: '#38424f', line: '#2c3540', kind: 'tile' },
-  command: { base: '#2a3546', line: '#3b6e9a', kind: 'grid' },
-  office: { base: '#5c534b', line: '#51493f', kind: 'carpet' },
-  wood: { base: '#6f5a45', line: '#5c4936', kind: 'planks' },
-  steel: { base: '#68707b', line: '#555c66', kind: 'rivet' },
-  corridor: { base: '#3a4046', line: '#30353a', kind: 'corridor' },
+  concrete: { base: '#a3a6a9', line: '#8f9295', kind: 'tile' },
+  industrial: { base: '#8c9197', line: '#7a7f85', kind: 'plate' },
+  lab: { base: '#d6dadd', line: '#b9bec2', kind: 'tile' },
+  medical: { base: '#cfe0dc', line: '#b2c8c3', kind: 'tile' },
+  security: { base: '#c2c4c6', line: '#a6a9ac', kind: 'tile' },
+  command: { base: '#7c8796', line: '#5d8fb8', kind: 'grid' },
+  office: { base: '#9b8e80', line: '#8a7e71', kind: 'carpet' },
+  wood: { base: '#a8835f', line: '#8e6c4c', kind: 'planks' },
+  steel: { base: '#a2a8ae', line: '#8b9197', kind: 'rivet' },
+  corridor: { base: '#b9bbbe', line: '#a3a6a9', kind: 'corridor' },
   construction: { base: '#3d3a32', line: '#e3b341', kind: 'hazard' },
   ground: { base: '#191e23', line: '#22292f', kind: 'ground' },
   locked: { base: '#16121a', line: '#2c1d22', kind: 'hatch' },
-  reflective: { base: '#8c9399', line: '#a3aab0', kind: 'tile' },
-  cold: { base: '#5d6c76', line: '#71828d', kind: 'tile' },
-  cell: { base: '#5f5852', line: '#6b635c', kind: 'grid' },
-  nested: { base: '#33393f', line: '#2a5466', kind: 'channel' },
-  bio: { base: '#4c5953', line: '#3f4b45', kind: 'plate' },
+  reflective: { base: '#c4cacf', line: '#aab1b7', kind: 'tile' },
+  cold: { base: '#a3b4be', line: '#8a9ca7', kind: 'tile' },
+  cell: { base: '#a39a92', line: '#8d857e', kind: 'tile' },
+  nested: { base: '#6d7780', line: '#3f7891', kind: 'channel' },
+  bio: { base: '#8d9b93', line: '#76847c', kind: 'plate' },
 };
 
 function cellDiamond() { return [P(0, 0), P(1, 0), P(1, 1), P(0, 1)]; }
@@ -26504,9 +26505,19 @@ def('floor', {
     ctx.lineWidth = 1;
     const line = (u0, v0, u1, v1) => { const a = P(u0, v0); const b = P(u1, v1); ctx.beginPath(); ctx.moveTo(a.x, a.y); ctx.lineTo(b.x, b.y); ctx.stroke(); };
     switch (f.kind) {
-      case 'tile':
-        line(0.5, 0, 0.5, 1); line(0, 0.5, 1, 0.5);
+      case 'tile': { // Fase 56.2: 2×2 baldosas con tono propio, bisel claro arriba-izquierda y oscuro abajo-derecha
+        const g = 0.022;
+        for (let i = 0; i < 2; i++) for (let j = 0; j < 2; j++) {
+          const u0 = i / 2 + g, u1 = (i + 1) / 2 - g, w0 = j / 2 + g, w1 = (j + 1) / 2 - g;
+          const t = ((v * 7 + i * 3 + j * 5) % 4) - 1.5;
+          fillPoly(ctx, [P(u0, w0), P(u1, w0), P(u1, w1), P(u0, w1)], shade(base, t * 0.012));
+          ctx.lineWidth = 0.8;
+          ctx.strokeStyle = rgba('#ffffff', 0.32); ctx.beginPath(); const a = P(u0, w1), b = P(u0, w0), c = P(u1, w0); ctx.moveTo(a.x, a.y); ctx.lineTo(b.x, b.y); ctx.lineTo(c.x, c.y); ctx.stroke();
+          ctx.strokeStyle = rgba('#000000', 0.13); ctx.beginPath(); const d = P(u1, w1); ctx.moveTo(c.x, c.y); ctx.lineTo(d.x, d.y); ctx.lineTo(a.x, a.y); ctx.stroke();
+        }
+        ctx.lineWidth = 1;
         break;
+      }
       case 'plate': {
         ctx.strokeStyle = shade(f.base, 0.12);
         for (let i = 0; i < 6; i++) for (let j = 0; j < 6; j++) {
@@ -26534,9 +26545,11 @@ def('floor', {
           const p = P(a, b); ctx.beginPath(); ctx.arc(p.x, p.y, 0.9, 0, 7); ctx.fill();
         }
         break;
-      case 'corridor':
-        ctx.strokeStyle = rgba('#000000', 0.18);
-        line(0.5, 0, 0.5, 1);
+      case 'corridor': // Fase 56.2: losas claras con junta
+        ctx.strokeStyle = rgba('#000000', 0.12);
+        line(0.5, 0, 0.5, 1); line(0, 0.5, 1, 0.5);
+        ctx.strokeStyle = rgba('#ffffff', 0.25);
+        line(0.01, 0.02, 0.49, 0.02); line(0.51, 0.02, 0.99, 0.02);
         break;
       case 'hazard': {
         ctx.lineWidth = 5;
@@ -26614,6 +26627,24 @@ const WALL_STYLES = {
 
 const WALL_MAX = H.backWall + 6;
 
+/** Fase 56.2: rótulo «SCP» + emblema pintado en la hoja de la puerta, en perspectiva sobre la pared. */
+function doorMark(ctx, side, d, da0, da1, locked) {
+  const K = 40;                                             // unidades locales por casilla a lo largo de la pared
+  const o = side === 'N' ? P(da0, d, 0) : P(d, da1, 0);
+  ctx.save();
+  ctx.transform(WORLD.HW / K, (side === 'N' ? 1 : -1) * WORLD.HH / K, 0, 1, o.x, o.y);
+  const W = (da1 - da0) * K; const ty = -H.door * 0.74, cy = -H.door * 0.47;
+  ctx.fillStyle = locked ? '#e9b3ad' : '#c9ccd1';
+  ctx.font = `800 ${W * 0.32}px system-ui, sans-serif`; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+  ctx.fillText('SCP', W * 0.5, ty);
+  const lx = W * 0.5, r = W * 0.17;                         // emblema: anillo con tres flechas hacia dentro
+  ctx.strokeStyle = ctx.fillStyle; ctx.lineWidth = r * 0.22;
+  ctx.beginPath(); ctx.arc(lx, cy, r, 0, 7); ctx.stroke();
+  ctx.beginPath(); ctx.arc(lx, cy, r * 0.42, 0, 7); ctx.stroke();
+  for (let i = 0; i < 3; i++) { const a = -Math.PI / 2 + i * 2.094; ctx.beginPath(); ctx.moveTo(lx + Math.cos(a) * r * 1.35, cy + Math.sin(a) * r * 1.35); ctx.lineTo(lx + Math.cos(a) * r * 0.55, cy + Math.sin(a) * r * 0.55); ctx.stroke(); }
+  ctx.restore();
+}
+
 def('wall', {
   ...CELL_ITEM(WALL_MAX),
   draw(ctx, params) {
@@ -26621,7 +26652,10 @@ def('wall', {
     const st = WALL_STYLES[styleId] ?? WALL_STYLES.containment;
     const back = CAPBOX.back ?? (side === 'N' || side === 'W'); // Fase 55
     const dmg = Number(dmgS) || 0;
-    const col = dmg >= 2 ? shade(st.col, -0.25) : st.col;
+    const col0 = dmg >= 2 ? shade(st.col, -0.25) : st.col;
+    // Fase 56.2 (estilo EG2): pared gris claro (con un toque del color de la sala) y zócalo gris oscuro
+    const col = mix(col0, '#dcdee1', dmg >= 2 ? 0.45 : 0.66);
+    const low = mix(col0, '#3e4146', 0.74);
     const d0 = side === 'S' || side === 'E' ? 1 - T : 0;
     const d1 = d0 + T;
     const seg = (a0, a1, z0, z1, c = col) => {
@@ -26667,39 +26701,53 @@ def('wall', {
       }
       return;
     }
+    const zb = h * 0.34;                                   // altura del zócalo oscuro
+    const dado = (a0, a1) => {                             // zócalo + franja de color + rodapié
+      faceFront(a0, a1, 0, zb, low);
+      faceFront(a0, a1, 0, 2.4, shade(low, -0.35));
+      faceFront(a0, a1, zb, zb + 1.8, st.trim);
+      faceFront(a0, a1, zb + 1.8, zb + 2.6, shade(col, -0.16));
+    };
     if (!isDoor) {
-      seg(0, 1, 0, h);
       if (back) {
-        faceFront(0, 1, 0, 3, shade(col, -0.35));
-        faceFront(0, 1, h * 0.62, h * 0.66, st.trim);
-        faceFront(0.495, 0.505, 3, h, shade(col, -0.12));
+        seg(0, 1, 0, h);
+        dado(0, 1);
+        faceFront(0.497, 0.503, zb + 2.6, h - 2, shade(col, -0.1));   // junta de panel
+        faceFront(0, 1, h - 2.2, h, shade(col, -0.07));
       } else {
+        seg(0, 1, 0, h, low);
         faceFront(0, 1, h - 2, h, st.trim);
       }
     } else {
-      seg(0, da0, 0, h);
-      seg(da1, 1, 0, h);
+      seg(0, da0, 0, h, back ? col : low);
+      seg(da1, 1, 0, h, back ? col : low);
       if (back) {
+        dado(0, da0); dado(da1, 1);
         seg(da0, da1, H.door, h);
         if (open) {
-          faceFront(da0, da1, 0, H.door, 'rgba(8,10,12,0.55)');
-        } else {
-          faceFront(da0, da1, 0, H.door, locked ? '#6b3532' : '#68717c');
-          faceFront((da0 + da1) / 2 - 0.006, (da0 + da1) / 2 + 0.006, 0, H.door, '#1d2227');
-          for (let i = 0; i < 5; i++) {
-            const a = da0 + ((da1 - da0) * i) / 5;
-            faceFront(a, a + (da1 - da0) / 10, 0, 5, '#e3b341');
+          faceFront(da0, da1, 0, H.door, 'rgba(14,16,20,0.78)');
+          for (let i = 0; i < 6; i++) { const a = da0 + ((da1 - da0) * i) / 6; faceFront(a, a + (da1 - da0) / 6, 0, 2.4, i % 2 ? '#1c1d20' : '#e8b931'); }
+        } else { // Fase 56.2: puerta blindada gris carbón con rótulo SCP (imagen de referencia)
+          const dc = locked ? '#4a2a2a' : '#2f3237';
+          faceFront(da0, da1, 0, H.door, dc);
+          faceFront(da0 + 0.02, da1 - 0.02, H.door * 0.08, H.door * 0.11, shade(dc, 0.1));
+          faceFront((da0 + da1) / 2 - 0.004, (da0 + da1) / 2 + 0.004, 0, H.door, '#18191c');
+          for (let i = 0; i < 6; i++) {                     // umbral con franjas de peligro
+            const a = da0 + ((da1 - da0) * i) / 6;
+            faceFront(a, a + (da1 - da0) / 6, 0, 3.4, i % 2 ? '#1c1d20' : '#e8b931');
           }
+          if (!CAPBOX.cap) doorMark(ctx, side, d1, da0, da1, locked);
         }
-        faceFront(da0 - 0.02, da0, 0, H.door, '#2a3036');
-        faceFront(da1, da1 + 0.02, 0, H.door, '#2a3036');
-        faceFront(da0, da1, H.door - 2, H.door, '#2a3036');
-        const lc = locked ? '#ef5350' : open ? '#36d399' : '#f2b33d';
-        faceFront(0.47, 0.53, H.door + 2, H.door + 5, lc);
-        faceFront(0, 1, 0, 3, shade(col, -0.35));
+        faceFront(da0 - 0.025, da0, 0, H.door, '#45484e');
+        faceFront(da1, da1 + 0.025, 0, H.door, '#45484e');
+        faceFront(da0 - 0.025, da1 + 0.025, H.door - 2.4, H.door, '#45484e');
+        const lc = locked ? '#ff3b30' : open ? '#36d399' : '#ff5a3c';   // luz de alarma sobre la puerta
+        faceFront(0.44, 0.56, H.door + 2.2, H.door + 6.6, '#2a2c30');
+        faceFront(0.455, 0.545, H.door + 3, H.door + 5.8, lc);
+        if (!CAPBOX.cap) { const c = side === 'N' ? P(0.5, d1, H.door + 4.4) : P(d1, 0.5, H.door + 4.4); const g = ctx.createRadialGradient(c.x, c.y, 0, c.x, c.y, 11); g.addColorStop(0, rgba(lc, 0.55)); g.addColorStop(1, rgba(lc, 0)); ctx.fillStyle = g; ctx.beginPath(); ctx.arc(c.x, c.y, 11, 0, 7); ctx.fill(); }
       } else {
-        if (!open) seg(da0, da1, 0, h - 1, locked ? '#a03a36' : '#8a939c');
-        if (!open) faceFront(da0, da1, 1, 3, '#e3b341');
+        if (!open) seg(da0, da1, 0, h - 1, locked ? '#5a2c2c' : '#34373c');
+        if (!open) for (let i = 0; i < 6; i++) { const a = da0 + ((da1 - da0) * i) / 6; faceFront(a, a + (da1 - da0) / 6, 1, 3.4, i % 2 ? '#1c1d20' : '#e8b931'); }
         const lc = locked ? '#ef5350' : open ? '#36d399' : '#f2b33d';
         seg(da0 - 0.02, da0 + 0.01, h, h + 3, lc);
       }
@@ -31258,7 +31306,7 @@ class Renderer {
   _doorActors(st, out) {
     const f = st.facility; if (!f.doors.size) return;
     const DM = __mod["src/facility/doors.js"]; const Dr = DM.Doors; const D = __mod["src/ui/gfx/isoDraw.js"]; const U = WORLD.UNIT;
-    const COL = { normal: '#7b858c', s1: '#3fbf7f', s2: '#e3b341', s3: '#e5534b', armored: '#4b5359', bulkhead: '#c9a227' };
+    const COL = { normal: '#3c4046', s1: '#3fbf7f', s2: '#e3b341', s3: '#e5534b', armored: '#2e3136', bulkhead: '#c9a227' }; // Fase 56.2: hojas gris carbón
     const lock = (ctx, p) => { ctx.fillStyle = '#e5534b'; ctx.fillRect(p.x - 4, p.y - 3, 8, 6); ctx.strokeStyle = '#e5534b'; ctx.lineWidth = 1.4; ctx.beginPath(); ctx.arc(p.x, p.y - 3, 2.6, Math.PI, 0); ctx.stroke(); };
     for (const [k, d] of f.doors) {
       const i = k.indexOf(','); const c = { x: +k.slice(0, i), y: +k.slice(i + 1) };
@@ -41798,11 +41846,12 @@ const GFX_KEY = 'scp_tycoon_gfx';
 const MAXL = 32;
 const QUALITY = { alta: 1, media: 0.75, baja: 0.5 };
 // Color de la luz de cada tipo de sala (r, g, b, intensidad)
+// Fase 56.2 (estilo EG2): interiores bien iluminados, luz casi blanca con un leve tono por sala
 const ROOM_LIGHT = {
-  command_center: [0.45, 0.68, 1.15, 1.0], security: [0.55, 0.7, 1.1, 0.9], laboratory: [0.92, 0.97, 1.04, 0.88],
-  infirmary: [0.88, 1.0, 0.98, 0.88], containment: [0.78, 0.8, 0.84, 0.75], maintenance: [1.15, 0.82, 0.5, 1.0],
-  dclass_cells: [1.0, 0.86, 0.62, 0.7], dormitory: [1.1, 0.88, 0.62, 0.85], administration: [1.05, 0.98, 0.86, 1.0],
-  default: [0.95, 0.95, 0.95, 0.95],
+  command_center: [0.8, 0.9, 1.08, 1.0], security: [0.86, 0.9, 1.04, 1.0], laboratory: [0.97, 1.0, 1.03, 1.0],
+  infirmary: [0.95, 1.02, 1.0, 1.0], containment: [0.92, 0.93, 0.96, 0.92], maintenance: [1.06, 0.95, 0.82, 1.0],
+  dclass_cells: [1.04, 0.95, 0.82, 0.9], dormitory: [1.06, 0.96, 0.84, 0.95], administration: [1.04, 1.0, 0.94, 1.0],
+  default: [1.0, 1.0, 1.0, 1.0],
 };
 
 const VS = 'attribute vec2 p;varying vec2 uv;void main(){uv=vec2(p.x*.5+.5,.5-p.y*.5);gl_Position=vec4(p,0.,1.);}';
@@ -41856,7 +41905,7 @@ void main(){
   vec3 col=base*light*dark;
   float sat=max(base.r,max(base.g,base.b))-min(base.r,min(base.g,base.b));
   col+=base*smoothstep(.55,.9,lum(base))*smoothstep(.2,.45,sat)*(1.-smoothstep(.75,.95,lum(col)))*.3;   // pantallas y señales de color: no se apagan (Fase 53: menos realce y nada sobre lo ya claro)
-  vec3 over=max(col-.82,0.); col=min(col,.82)+over/(1.+over*2.2);       // los blancos no se queman
+  vec3 over=max(col-.9,0.); col=min(col,.9)+over/(1.+over*2.2);       // los blancos no se queman
   if(uBloom>0.){ vec3 b=vec3(0.); vec2 s=uTexel*6.;
     for(int x=-2;x<=2;x++)for(int y=-2;y<=2;y++){ vec3 q=texture2D(uSmall,uv+vec2(float(x),float(y))*s).rgb; b+=q*smoothstep(.8,1.,lum(q)); }
     col+=b/25.*uBloom; }
@@ -41979,7 +42028,7 @@ class GLFX {
     }
     gl.uniform4fv(U.uA, A); gl.uniform4fv(U.uB, B); gl.uniform3fv(U.uC, C); gl.uniform1i(U.uN, n);
     const out = !!outage(st);
-    gl.uniform3fv(U.uAmb, out ? [0.2, 0.19, 0.24] : [0.4, 0.42, 0.5]);
+    gl.uniform3fv(U.uAmb, out ? [0.2, 0.19, 0.24] : [0.47, 0.48, 0.51]); // Fase 56.2: ambiente más neutro y claro
     gl.uniform1f(U.uAlarm, this._alarm ? (rm ? 0.5 : 1) : 0);
     gl.uniform1f(U.uTime, tt);
     gl.uniform1f(U.uRelief, this.prefs.mode === 'relief' ? (this.scale() <= QUALITY.baja ? 1 : 2) : 0);
@@ -42000,7 +42049,7 @@ class GLFX {
       if (room.state === 'construction') { L.push({ t: 0, x: R.x, y: R.y, w: R.w, h: R.h, c: [1.15, 0.85, 0.5], k: 0.75, flicker: true }); anim = true; continue; }
       if (lit(room)) {
         const c = ROOM_LIGHT[room.type] ?? ROOM_LIGHT.default;
-        L.push({ t: 0, x: R.x, y: R.y, w: R.w, h: R.h, c: c.slice(0, 3), k: c[3] * 0.72 });
+        L.push({ t: 0, x: R.x, y: R.y, w: R.w, h: R.h, c: c.slice(0, 3), k: c[3] * 0.86 }); // Fase 56.2: antes 0.72
       } else { // a oscuras: solo la luz roja de emergencia
         L.push({ t: 1, x: R.x + R.w / 2, y: R.y + R.h / 2, r: Math.max(R.w, R.h) * 0.9, c: [1.0, 0.16, 0.1], k: 0.95, flicker: true }); anim = true;
       }
