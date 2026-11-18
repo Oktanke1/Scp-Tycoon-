@@ -46500,6 +46500,94 @@ function partGeo(part, rule, all) {
   geo.setAttribute('skinIndex', new THREE.Uint16BufferAttribute(si, 4)); geo.setAttribute('skinWeight', new THREE.Float32BufferAttribute(sw, 4));
   return geo;
 }
+// ───────── Fase 62: cuerpos de piezas rígidas redondeadas (figura de acción): cada pieza va pegada a un hueso y no se deforma ─────────
+const RBC = new Map();
+function rbGeo(w, h, d, r) {
+  r = Math.min(r, w / 2, h / 2, d / 2) * 0.999; const key = [w, h, d, r].map((x) => x.toFixed(3)).join('|'); let g = RBC.get(key); if (g) return g;
+  g = new THREE.BoxGeometry(w, h, d, 6, 6, 6); const P = g.attributes.position, N = g.attributes.normal; const ix = w / 2 - r, iy = h / 2 - r, iz = d / 2 - r;
+  for (let i = 0; i < P.count; i++) { const x = P.getX(i), y = P.getY(i), z = P.getZ(i); const cx = clamp(x, -ix, ix), cy = clamp(y, -iy, iy), cz = clamp(z, -iz, iz); let nx = x - cx, ny = y - cy, nz = z - cz; const l = Math.hypot(nx, ny, nz) || 1; nx /= l; ny /= l; nz /= l; P.setXYZ(i, cx + nx * r, cy + ny * r, cz + nz * r); N.setXYZ(i, nx, ny, nz); }
+  RBC.set(key, g); return g;
+}
+const BJ = Object.fromEntries(BONES.map(([n, , j]) => [n, J[j]]));
+const SEGS = { uarmL: ['shL', 'elL'], farmL: ['elL', 'wrL'], handL: ['wrL', 'haL'], uarmR: ['shR', 'elR'], farmR: ['elR', 'wrR'], handR: ['wrR', 'haR'], thighL: ['hiL', 'knL'], shinL: ['knL', 'anL'], thighR: ['hiR', 'knR'], shinR: ['knR', 'anR'] };
+/** Piezas de un aspecto: { bone, seg?: [t0, t1] a lo largo del segmento | c: centro, s: [ancho, alto, fondo], r, col, mat }. */
+function segDef(kind, look) {
+  const out = []; const SK = look.skin;
+  const S = (bone, t0, t1, w, d, col, mat = 'cloth', r = 0.035, dx = 0, dz = 0) => out.push({ bone, seg: [t0, t1], w, d, col, mat, r, dx, dz });
+  const B = (bone, c, s, col, mat = 'cloth', r = 0.03) => out.push({ bone, c, s, col, mat, r });
+  const both = (fn) => { fn('L', 1); fn('R', -1); };
+  const P = { research: ['#f3f5f7', '#5d5967', '#3a2e2a', null, '#f3f5f7', 1], security: ['#c3c8ce', '#c3c8ce', '#202226', '#2b2d31', '#c3c8ce', 1.12], e11: ['#3e4a57', '#3e4a57', '#1e2329', '#2a313a', '#3e4a57', 1.14], chaos: ['#5b5830', '#56532e', '#1b1b1e', '#1f2023', '#5b5830', 1.14],
+    medical: ['#4fb3a2', '#4fb3a2', '#eef1f2', null, '#4fb3a2', 1], administration: ['#3f4f5b', '#36444e', '#1d2024', null, '#3f4f5b', 1], engineering: ['#3e5468', '#3e5468', '#4a3628', '#c99f6a', '#3e5468', 1.06],
+    containment: ['#e2b52c', '#e2b52c', '#2b2b2b', '#2b2b2b', '#e2b52c', 1.12], dclass: ['#e0782c', '#e0782c', '#2b2b2e', null, '#e0782c', 1] }[kind] ?? ['#3f4f5b', '#36444e', '#1d2024', null, '#3f4f5b', 1];
+  const [top, legs, shoe, glove, arm, k] = P; const shortSl = kind === 'medical' || kind === 'dclass';
+  const armored = ['security', 'e11', 'chaos'].includes(kind);
+  // tronco: pecho, abdomen y pelvis
+  B('chest', [0, 1.33, 0], [0.33 * k, 0.29, 0.23 * k], top, 'cloth', 0.06);
+  B('spine', [0, 1.12, 0], [0.3 * k, 0.2, 0.21 * k], top, 'cloth', 0.05);
+  B('hips', [0, 0.95, 0], [0.33 * k, 0.17, 0.22 * k], legs, 'cloth', 0.05);
+  B('hips', [0, 1.005, 0], [0.34 * k, 0.045, 0.23 * k], kind === 'engineering' ? '#6a4a2e' : '#1c1d20', 'leather', 0.015); // cinturón
+  B('hips', [0, 1.005, 0.115 * k], [0.05, 0.035, 0.012], '#b9bdc2', 'metal', 0.006);
+  // brazos, manos, piernas y pies
+  both((s, x) => {
+    S('uarm' + s, -0.12, 0.5, 0.128 * k, 0.13 * k, arm, 'cloth', 0.05);
+    S('uarm' + s, 0.42, 1.06, 0.118 * k, 0.12 * k, shortSl ? SK : arm, shortSl ? 'skin' : 'cloth', 0.042);
+    if (shortSl) S('uarm' + s, 0.38, 0.5, 0.132 * k, 0.134 * k, arm, 'cloth', 0.02);
+    S('farm' + s, -0.02, 0.92, 0.106 * k, 0.108 * k, shortSl ? SK : arm, shortSl ? 'skin' : 'cloth', 0.04);
+    if (!shortSl) S('farm' + s, 0.78, 0.97, 0.116 * k, 0.118 * k, glove && armored ? glove : kind === 'research' ? '#e2e6ea' : arm, 'cloth', 0.02); // puño
+    S('hand' + s, -0.25, 1.25, 0.08 * k, 0.11 * k, glove ?? SK, glove ? 'leather' : 'skin', 0.03);
+    S('thigh' + s, -0.08, 1.02, 0.155 * k, 0.165 * k, legs, 'cloth', 0.055);
+    S('shin' + s, -0.02, 0.93, 0.135 * k, 0.145 * k, legs, 'cloth', 0.05);
+    const boot = armored || kind === 'engineering' || kind === 'containment';
+    if (boot) S('shin' + s, 0.6, 1.02, 0.148 * k, 0.158 * k, shoe, 'leather', 0.035);
+    B('foot' + s, [J['an' + s][0], 0.05, 0.04], [0.135 * k, 0.1, 0.24], shoe, 'leather', 0.035);
+    B('foot' + s, [J['an' + s][0], 0.01, 0.04], [0.141 * k, 0.022, 0.25], '#151517', 'rubber', 0.008);
+    if (armored) { S('shin' + s, 0.04, 0.3, 0.155 * k, 0.07, top === '#c3c8ce' ? '#2f3136' : glove, 'plastic', 0.02, 0, 0.058); // rodillera
+      B('uarm' + s, [J['sh' + s][0] + x * 0.03, 1.43, 0], [0.16 * k, 0.075, 0.17 * k], kind === 'security' ? '#aeb3b9' : top, 'plastic', 0.03); } // hombrera
+  });
+  // detalles por departamento
+  const FZ = 0.115 * k; // frente del pecho
+  switch (kind) {
+    case 'research':
+      B('chest', [0, 1.3, FZ - 0.008], [0.08, 0.27, 0.02], '#8ea7da', 'cloth', 0.006); B('chest', [0, 1.29, FZ + 0.004], [0.026, 0.22, 0.012], '#3d5a8a', 'cloth', 0.004);
+      B('spine', [0, 1.13, FZ - 0.006], [0.07, 0.18, 0.02], '#8ea7da', 'cloth', 0.006);
+      B('hips', [0, 0.9, 0], [0.36, 0.22, 0.25], top, 'cloth', 0.05); B('hips', [0, 0.95, 0.126], [0.05, 0.27, 0.01], '#dfe4e9', 'cloth', 0.003); // faldón de la bata y abertura
+      for (const sx of [-1, 1]) B('hips', [sx * 0.1, 0.92, 0.127], [0.07, 0.006, 0.01], '#dfe4e9', 'cloth', 0.002); // bolsillos
+      break;
+    case 'administration':
+      B('chest', [0, 1.33, FZ - 0.008], [0.08, 0.25, 0.02], '#f2f4f5', 'cloth', 0.006); B('chest', [0, 1.31, FZ + 0.004], [0.026, 0.2, 0.012], '#3d8ca2', 'cloth', 0.004);
+      B('spine', [0, 1.11, 0], [0.29, 0.21, 0.21], top, 'cloth', 0.05); break;
+    case 'medical': B('chest', [0, 1.43, FZ - 0.012], [0.07, 0.07, 0.02], SK, 'skin', 0.01); B('chest', [-0.07, 1.31, FZ + 0.003], [0.06, 0.06, 0.012], '#3d988a', 'cloth', 0.004);
+      B('chest', [0.05, 1.36, FZ + 0.004], [0.018, 0.13, 0.012], '#2d3338', 'rubber', 0.006); break;
+    case 'dclass': B('chest', [-0.08, 1.33, FZ + 0.003], [0.08, 0.05, 0.012], '#f4f1ea', 'plastic', 0.004); B('chest', [-0.08, 1.33, FZ + 0.01], [0.06, 0.012, 0.004], '#2b2b2e', 'plastic', 0.001); break;
+    case 'engineering': B('chest', [0, 1.25, 0], [0.33 * k, 0.4, 0.24 * k], '#f0873a', 'cloth', 0.05);
+      for (const y of [1.17, 1.3]) B('chest', [0, y, 0], [0.336 * k, 0.03, 0.245 * k], '#e9edf0', 'plastic', 0.012); break;
+    case 'containment': B('chest', [0, 1.3, -0.15], [0.16, 0.3, 0.1], '#8f989f', 'metal', 0.04); B('chest', [0, 1.32, FZ + 0.006], [0.07, 0.05, 0.03], '#4a4d52', 'plastic', 0.01); break;
+    default: { // guardias: portaplacas con bolsillos y cuello alto
+      const V = { security: ['#2c2f34', '#3c3f45'], e11: ['#64798c', '#4c5d6d'], chaos: ['#202125', '#2c2d32'] }[kind];
+      B('chest', [0, 1.26, 0], [0.34 * k, 0.36, 0.25 * k], V[0], 'plastic', 0.035);
+      B('chest', [0, 1.45, -0.01], [0.24 * k, 0.07, 0.2 * k], V[0], 'plastic', 0.025);
+      for (const x of [-0.1, 0, 0.1]) B('chest', [x * k, 1.15, 0.125 * k + 0.012], [0.08, 0.1, 0.035], V[1], 'cloth', 0.012);
+      B('chest', [0, 1.33, 0.125 * k + 0.01], [0.22, 0.04, 0.03], V[1], 'cloth', 0.01);
+      if (kind === 'e11') B('uarmL', [J.shL[0] + 0.045, 1.28, -0.01], [0.155 * k, 0.05, 0.155 * k], '#e0703a', 'cloth', 0.015);
+    }
+  }
+  return out;
+}
+function buildSegs(per, kind, look) {
+  const sk = per.sk;
+  for (const pc of segDef(kind, look)) {
+    const bone = sk.byName[pc.bone]; if (!bone) continue; const j = BJ[pc.bone]; let mesh;
+    const m = mat2(pc.mat, pc.col, {});
+    if (pc.seg) {
+      const [a, b] = SEGS[pc.bone].map((n) => J[n]); const dir = sub(b, a); const L = len(dir); const u = [dir[0] / L, dir[1] / L, dir[2] / L];
+      const t0 = pc.seg[0], t1 = pc.seg[1]; const h = (t1 - t0) * L; const mid = [a[0] + dir[0] * (t0 + t1) / 2, a[1] + dir[1] * (t0 + t1) / 2, a[2] + dir[2] * (t0 + t1) / 2];
+      mesh = new THREE.Mesh(rbGeo(pc.w, h, pc.d, pc.r), m); mesh.quaternion.setFromUnitVectors(new THREE.Vector3(0, -1, 0), new THREE.Vector3(u[0], u[1], u[2]));
+      mesh.position.set(mid[0] - j[0] + (pc.dx ?? 0), mid[1] - j[1], mid[2] - j[2] + (pc.dz ?? 0));
+    } else { mesh = new THREE.Mesh(rbGeo(pc.s[0], pc.s[1], pc.s[2], pc.r), m); mesh.position.set(pc.c[0] - j[0], pc.c[1] - j[1], pc.c[2] - j[2]); }
+    bone.add(mesh);
+  }
+}
+
 const HAIR_STYLES = ['part', 'short', 'bun', 'long', 'bald', 'buzz'];
 const FACES = [{ jaw: 0.068 }, { jaw: 0.08, nose: 1.15, chin: 0.026 }, { jaw: 0.062, nose: 0.85, long: 1.05 }, { jaw: 0.074, nose: 1.25, wide: 1.04 }, { jaw: 0.07, nose: 1.0, chin: 0.018, long: 0.96 }, { jaw: 0.084, nose: 1.1, wide: 1.06, chin: 0.027 }];
 const BEARDS = ['none', 'full', 'goatee', 'mustache', 'stubble'];
@@ -46522,7 +46610,7 @@ function hairSDF2(style) { const base = hairSDF(style === 'part' ? 'part' : '');
   return base; }
 /** Kit de un aspecto: se construye pieza a pieza (una por llamada a step) para no congelar el juego. */
 class Kit {
-  constructor(kind) { this.def = deptDef(kind); for (const pt of this.def.parts) pt.h *= pt.id === 'coat' || pt.id === 'jacket' ? 1.25 : pt.rigid ? 1.5 : 2.0; this.queue = this.def.parts.filter((p) => p.id !== 'skin'); /* resolución de juego; la cabeza va aparte (variantes) */ this.geos = new Map(); this.ready = false; this.tris = 0;
+  constructor(kind) { this.def = deptDef(kind); for (const pt of this.def.parts) pt.h *= pt.id === 'coat' || pt.id === 'jacket' ? 1.25 : pt.rigid ? 1.5 : 2.0; this.queue = this.def.parts.filter((p) => p.rigid === 'head'); /* resolución de juego; la cabeza va aparte (variantes) */ this.geos = new Map(); this.ready = false; this.tris = 0;
     const all = (p) => { let d = 1e9; for (const q of this.def.parts) { if (p[0] < q.lo[0] - 0.06 || p[0] > q.hi[0] + 0.06 || p[1] < q.lo[1] - 0.06 || p[1] > q.hi[1] + 0.06 || p[2] < q.lo[2] - 0.06 || p[2] > q.hi[2] + 0.06) continue; d = Math.min(d, q.f(p)); } return d; };
     this.all = all;
     for (const part of this.def.parts) if (part.hideIn) { const f0 = part.f, cov = part.hideIn.map((id) => this.def.parts.find((q) => q.id === id)?.f).filter(Boolean); part.f = (p) => { let d = f0(p); for (const g of cov) d = Math.max(d, -(g(p) + 0.012)); return d; }; } }
@@ -46545,8 +46633,9 @@ class Person {
   constructor(kit, look) {
     const def = kit.def; this.kit = kit; this.look = look; this.root = new THREE.Group(); const sk = this.sk = buildSkeleton(); this.root.add(sk.bones[0]);
     this.root.updateMatrixWorld(true); sk.skeleton.calculateInverses();
+    buildSegs(this, def.kind, look); // Fase 62: cuerpo de piezas rígidas
     for (const part of def.parts) {
-      const geo = kit.geos.get(part.id); if (!geo) continue;
+      if (part.rigid !== 'head') continue; const geo = kit.geos.get(part.id); if (!geo) continue;
       const m = mat2(part.role === 'skin' ? 'skin' : part.mat, part.role === 'skin' ? look.skin : part.color, { vc: true });
       if (part.rigid) { const o = new THREE.Mesh(geo, m); sk.byName[part.rigid].add(o); continue; }
       if (part.id === 'skin') continue; // la cabeza la pone cada empleado (variantes de cara)
@@ -46598,10 +46687,10 @@ function props2(def, look, sk, root) {
     add(box(0.05, 0.075, 0.3), pm, 0, 0, 0); add(gc('barrel', () => new THREE.CylinderGeometry(0.011, 0.011, 0.24, 8)), mm, 0, 0.012, 0.27, Math.PI / 2); add(box(0.056, 0.06, 0.16), pm, 0, 0.005, 0.12);
     add(box(0.03, 0.12, 0.045), pm, 0, -0.085, 0.03, 0.25); add(box(0.028, 0.08, 0.035), pm, 0, -0.06, -0.075, -0.35); add(box(0.045, 0.07, 0.17), pm, 0, -0.01, -0.23);
     g.userData.grip = new THREE.Vector3(0, -0.07, -0.085); g.userData.fore = new THREE.Vector3(0, -0.035, 0.15); sk.byName.chest.add(g); sk.rifle = g; }
-  if (L.band) { const b = new THREE.Mesh(gc('band', () => new THREE.CylinderGeometry(0.066, 0.066, 0.05, 14, 1, true)), mat2('cloth', L.band, {})); b.position.set((J.shL[0] - J.elL[0]) * -0.45, (J.elL[1] - J.shL[1]) * 0.45, 0); b.rotation.z = 0.25; sk.byName.uarmL.add(b); }
+  if (false && L.band) { const b = new THREE.Mesh(gc('band', () => new THREE.CylinderGeometry(0.066, 0.066, 0.05, 14, 1, true)), mat2('cloth', L.band, {})); b.position.set((J.shL[0] - J.elL[0]) * -0.45, (J.elL[1] - J.shL[1]) * 0.45, 0); b.rotation.z = 0.25; sk.byName.uarmL.add(b); }
   if (look.tablet) { const tab = new THREE.Group(); tab.add(new THREE.Mesh(box(0.17, 0.012, 0.23), mat2('plastic', '#2b2f36'))); const scr = new THREE.Mesh(gc('scr', () => new THREE.PlaneGeometry(0.15, 0.2)), gc('scrM', () => new THREE.MeshBasicMaterial({ color: '#7fd8f0' }))); scr.rotation.x = -Math.PI / 2; scr.position.y = 0.0065; tab.add(scr); root.add(tab); sk.tablet = tab; }
-  if (L.extras === 'research' || L.extras === 'admin' || L.extras === 'medical') { const c = new THREE.Mesh(box(0.05, 0.068, 0.004), mat2('plastic', '#f4f6f8')); c.position.set(0.09, 1.31 - J.chest[1], L.extras === 'research' ? 0.165 : 0.155); c.rotation.x = -0.12; sk.byName.chest.add(c); } // credencial
-  if (L.extras === 'hazmat') { const t = new THREE.Mesh(gc('tank', () => new THREE.CylinderGeometry(0.06, 0.06, 0.32, 14)), mat2('metal', '#8f989f')); t.position.set(0, 1.22 - J.chest[1], -0.17); sk.byName.chest.add(t); }
+  if (L.extras === 'research' || L.extras === 'admin' || L.extras === 'medical') { const c = new THREE.Mesh(box(0.05, 0.068, 0.004), mat2('plastic', '#f4f6f8')); c.position.set(0.09, 1.31 - J.chest[1], 0.118); c.rotation.x = -0.12; sk.byName.chest.add(c); } // credencial
+  if (false && L.extras === 'hazmat') { const t = new THREE.Mesh(gc('tank', () => new THREE.CylinderGeometry(0.06, 0.06, 0.32, 14)), mat2('metal', '#8f989f')); t.position.set(0, 1.22 - J.chest[1], -0.17); sk.byName.chest.add(t); }
 }
 // ── poses: el nombre de fotograma del juego → postura ──
 function poseFor(frame, flags) {
